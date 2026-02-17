@@ -16,6 +16,14 @@ const io = new Server(httpServer, {
 app.use(cors());
 app.use(express.json());
 
+// Disable caching for all routes
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 // Store active users and their preferences
 const waitingQueue = {
   all: [],
