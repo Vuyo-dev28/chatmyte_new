@@ -12,8 +12,8 @@ This application now includes a real-time server for live video chat and messagi
 2. **Create environment file:**
    Create a `.env` file in the root directory:
    ```
-   VITE_SERVER_URL=http://localhost:3001
-   PORT=3001
+   VITE_SERVER_URL=http://localhost:8080
+   PORT=8080
    CLIENT_URL=http://localhost:5173
    ```
 
@@ -40,7 +40,7 @@ This application now includes a real-time server for live video chat and messagi
 
 ## Server Endpoints
 
-The server runs on `http://localhost:3001` by default.
+The server runs on `http://localhost:8080` by default.
 
 ### Socket Events
 

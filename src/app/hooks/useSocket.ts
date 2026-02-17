@@ -12,7 +12,7 @@ export function useSocket() {
     if (!user) return;
 
     // Connect to server
-    const newSocket = io(import.meta.env.VITE_SERVER_URL || 'http://localhost:3001', {
+    const newSocket = io(import.meta.env.VITE_SERVER_URL || 'http://localhost:8080', {
       transports: ['websocket'],
       reconnection: true,
       reconnectionDelay: 1000,
