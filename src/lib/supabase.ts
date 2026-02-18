@@ -1,5 +1,4 @@
 import { createBrowserClient } from "@supabase/ssr";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -8,12 +7,19 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error("Missing Supabase environment variables");
 }
 
-// Create browser client for SSR support
-export const createClient = () =>
-  createBrowserClient(
-    supabaseUrl,
-    supabaseKey,
-  );
+// Singleton instance to prevent multiple GoTrueClient instances
+let supabaseInstance: ReturnType<typeof createBrowserClient> | null = null;
 
-// Create standard client (alternative)
-export const supabase = createSupabaseClient(supabaseUrl, supabaseKey);
+// Create browser client for SSR support (singleton)
+export const createClient = () => {
+  if (!supabaseInstance) {
+    supabaseInstance = createBrowserClient(
+      supabaseUrl,
+      supabaseKey,
+    );
+  }
+  return supabaseInstance;
+};
+
+// Export singleton instance directly
+export const supabase = createClient();

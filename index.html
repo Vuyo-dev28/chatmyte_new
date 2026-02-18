@@ -9,12 +9,30 @@
       <meta http-equiv="Expires" content="0" />
       <title>ChatMyte</title>
       <script>
-        // Clear cache on each reload
+        // Aggressive cache clearing on each load
         (function() {
+          // Clear all caches immediately
           if ('caches' in window) {
             caches.keys().then(function(names) {
               for (let name of names) {
                 caches.delete(name);
+              }
+            });
+          }
+
+          // Clear localStorage and sessionStorage
+          try {
+            localStorage.clear();
+            sessionStorage.clear();
+          } catch (e) {
+            console.warn('Could not clear storage:', e);
+          }
+
+          // Prevent browser from caching this page
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+              for(let registration of registrations) {
+                registration.unregister();
               }
             });
           }

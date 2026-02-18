@@ -1,4 +1,4 @@
-import { createClient } from './supabase';
+import { supabase } from './supabase';
 import { paypalService, PayPalConfig } from './paypal';
 
 export type SubscriptionTier = 'free' | 'premium';
@@ -19,7 +19,7 @@ export interface Subscription {
   updated_at: string;
 }
 
-const supabase = createClient();
+// Use singleton instance
 
 /**
  * Get the active subscription for the current user
@@ -29,15 +29,33 @@ export async function getActiveSubscription(): Promise<Subscription | null> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
+    // Fix: Use a simpler query to avoid 406 errors
+    // Get active subscriptions and filter expired ones in the query
     const { data, error } = await supabase
       .from('subscriptions')
       .select('*')
       .eq('user_id', user.id)
       .eq('status', 'active')
-      .or('expires_at.is.null,expires_at.gt.now()')
       .order('started_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(10); // Get more to filter client-side if needed
+
+    if (error) {
+      console.error('Error fetching subscription:', error);
+      return null;
+    }
+
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    // Filter out expired subscriptions client-side
+    const now = new Date();
+    const activeSubscription = data.find(sub => {
+      if (!sub.expires_at) return true; // No expiration = active
+      return new Date(sub.expires_at) > now;
+    });
+
+    return activeSubscription as Subscription | null;
 
     if (error) {
       if (error.code === 'PGRST116') {

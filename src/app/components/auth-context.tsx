@@ -27,20 +27,77 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // Use singleton instance
   const supabase = createClient();
 
   // Check for existing session on mount
   useEffect(() => {
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
+
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        // Set a shorter timeout (2 seconds) - if it takes longer, just show login page
+        timeoutId = setTimeout(() => {
+          if (isMounted) {
+            console.warn('Session check timeout - showing login page');
+            setLoading(false);
+          }
+        }, 2000);
+
+        // Simple session check with timeout handling
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 1500));
+        
+        const result = await Promise.race([sessionPromise, timeoutPromise]);
+        
+        // Clear timeout if we got a response
+        if (isMounted && timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        
+        // If timeout won, result will be null
+        if (!result) {
+          console.log('Session check timed out - showing login page');
+          if (isMounted) {
+            setLoading(false);
+          }
+          return;
+        }
+        
+        const { data: { session }, error } = result as any;
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          // Don't try to sign out on error - just show login page
+          if (isMounted) {
+            setLoading(false);
+          }
+          return;
+        }
+        
         if (session?.user) {
           await loadUser(session.user);
         }
-      } catch (error) {
-        console.error('Error checking session:', error);
-      } finally {
-        setLoading(false);
+        
+        // Always set loading to false after checking
+        if (isMounted) {
+          setLoading(false);
+        }
+      } catch (error: any) {
+        // Handle any errors gracefully, including AbortError
+        if (error?.name === 'AbortError') {
+          console.log('Session check was aborted - showing login page');
+        } else {
+          console.error('Error checking session:', error);
+        }
+        // Ensure loading state is cleared even on error
+        if (isMounted) {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          setLoading(false);
+        }
       }
     };
 
@@ -48,15 +105,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        await loadUser(session.user);
-      } else {
-        setUser(null);
+      if (isMounted) {
+        // Don't set loading to false here if we're already loading - let checkSession handle it
+        // Only update loading if we're not in the initial check phase
+        if (event !== 'INITIAL_SESSION') {
+          setLoading(false);
+        }
+        
+        if (session?.user) {
+          await loadUser(session.user);
+        } else {
+          setUser(null);
+        }
       }
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     };
   }, []);
 

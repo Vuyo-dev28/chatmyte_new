@@ -6,13 +6,13 @@ import { ChatInterface } from './components/chat-interface';
 import { initializePayPal } from '../lib/subscriptions';
 import { PAYPAL_CONFIG } from '../lib/paypal-config';
 import { paypalService } from '../lib/paypal';
-import { createClient } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 function AppContent() {
   const { user, loading } = useAuth();
   const [showSignup, setShowSignup] = useState(false);
   const [processingSubscription, setProcessingSubscription] = useState(false);
-  const supabase = createClient();
+  // Use singleton instance
 
   // Handle PayPal subscription callback
   useEffect(() => {
@@ -136,7 +136,21 @@ function AppContent() {
   }, [loading]);
 
   // Show loading state while checking authentication or processing subscription
-  if (loading || processingSubscription) {
+  // Add a maximum loading time to prevent infinite loading
+  const [maxLoadingReached, setMaxLoadingReached] = useState(false);
+  
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => {
+        setMaxLoadingReached(true);
+      }, 3000); // Force show login after 3 seconds max
+      return () => clearTimeout(timer);
+    } else {
+      setMaxLoadingReached(false);
+    }
+  }, [loading]);
+
+  if ((loading && !maxLoadingReached) || processingSubscription) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <div className="text-center">

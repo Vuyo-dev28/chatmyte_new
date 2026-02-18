@@ -13,10 +13,17 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    if (isSubmitting) {
+      return; // Prevent double submission
+    }
+    
     setError('');
     
     if (!email || !password) {
@@ -24,6 +31,7 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const success = await login(email, password);
       if (!success) {
@@ -31,6 +39,8 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -66,6 +76,7 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="bg-black/50 border-yellow-600/30 text-white placeholder:text-yellow-200/30 focus:border-yellow-500 h-10 sm:h-11 text-sm sm:text-base"
@@ -79,9 +90,10 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
 
             <Button 
               type="submit" 
-              className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-black h-10 sm:h-11 text-sm sm:text-base"
+              disabled={isSubmitting}
+              className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-black h-10 sm:h-11 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Login
+              {isSubmitting ? 'Logging in...' : 'Login'}
             </Button>
           </form>
 

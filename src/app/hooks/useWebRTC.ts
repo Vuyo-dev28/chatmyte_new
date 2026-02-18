@@ -3,8 +3,8 @@ import { Socket } from 'socket.io-client';
 
 interface UseWebRTCOptions {
   socket: Socket | null;
-  localVideoRef: React.RefObject<HTMLVideoElement>;
-  remoteVideoRef: React.RefObject<HTMLVideoElement>;
+  localVideoRef: React.RefObject<HTMLVideoElement | null>;
+  remoteVideoRef: React.RefObject<HTMLVideoElement | null>;
   isVideoEnabled: boolean;
   isAudioEnabled: boolean;
   partnerId: string | null;
@@ -52,14 +52,17 @@ export function useWebRTC({
       if (event.candidate && socket) {
         const currentPartnerId = partnerIdRef.current;
         if (currentPartnerId) {
-          console.log('Sending ICE candidate to', currentPartnerId);
+          console.log('[WebRTC] Sending ICE candidate to', currentPartnerId);
+          console.log('[WebRTC] Candidate:', event.candidate.candidate?.substring(0, 50) + '...');
           socket.emit('ice-candidate', {
             candidate: event.candidate,
             targetId: currentPartnerId
           });
         } else {
-          console.log('No partnerId, storing candidate for later');
+          console.log('[WebRTC] No partnerId, cannot send ICE candidate');
         }
+      } else if (!event.candidate) {
+        console.log('[WebRTC] ICE candidate gathering complete (null candidate)');
       }
     };
 
@@ -73,24 +76,53 @@ export function useWebRTC({
       console.log('Connection state:', peerConnectionRef.current?.connectionState);
     };
 
-    // Handle remote stream
+    // Handle remote stream - MUST be registered before setting remote description
     peerConnectionRef.current.ontrack = (event) => {
-      console.log('Received remote track:', event);
-      if (remoteVideoRef.current && event.streams && event.streams[0]) {
-        console.log('Setting remote video stream');
-        remoteVideoRef.current.srcObject = event.streams[0];
-        // Force play
-        remoteVideoRef.current.play().catch(err => {
-          console.error('Error playing remote video:', err);
-        });
-      } else if (remoteVideoRef.current && event.track) {
-        // Fallback: create a new stream from the track
-        console.log('Creating stream from track');
-        const stream = new MediaStream([event.track]);
-        remoteVideoRef.current.srcObject = stream;
-        remoteVideoRef.current.play().catch(err => {
-          console.error('Error playing remote video:', err);
-        });
+      console.log('[WebRTC] ontrack event fired!');
+      console.log('[WebRTC] Track kind:', event.track.kind);
+      console.log('[WebRTC] Track id:', event.track.id);
+      console.log('[WebRTC] Streams count:', event.streams.length);
+      console.log('[WebRTC] Track enabled:', event.track.enabled);
+      console.log('[WebRTC] Track readyState:', event.track.readyState);
+      
+      if (remoteVideoRef.current) {
+        let streamToSet: MediaStream | null = null;
+        
+        if (event.streams && event.streams.length > 0) {
+          console.log('[WebRTC] Setting remote video stream from event.streams[0]');
+          streamToSet = event.streams[0];
+        } else if (event.track) {
+          // Fallback: create a new stream from the track
+          console.log('[WebRTC] Creating stream from track (fallback)');
+          streamToSet = new MediaStream([event.track]);
+        }
+        
+        if (streamToSet) {
+          // Check if this is a video track
+          const hasVideoTrack = streamToSet.getVideoTracks().length > 0;
+          console.log('[WebRTC] Stream has video track:', hasVideoTrack);
+          console.log('[WebRTC] Video tracks:', streamToSet.getVideoTracks().map(t => ({ id: t.id, enabled: t.enabled, readyState: t.readyState })));
+          
+          remoteVideoRef.current.srcObject = streamToSet;
+          
+          // Force play with error handling
+          remoteVideoRef.current.play()
+            .then(() => {
+              console.log('[WebRTC] ✅ Remote video playing successfully');
+              console.log('[WebRTC] Video element dimensions:', {
+                videoWidth: remoteVideoRef.current?.videoWidth,
+                videoHeight: remoteVideoRef.current?.videoHeight,
+                readyState: remoteVideoRef.current?.readyState
+              });
+            })
+            .catch(err => {
+              console.error('[WebRTC] ❌ Error playing remote video:', err);
+            });
+        } else {
+          console.warn('[WebRTC] No stream to set!');
+        }
+      } else {
+        console.warn('[WebRTC] remoteVideoRef.current is null! Cannot set remote stream.');
       }
     };
 
@@ -164,8 +196,10 @@ export function useWebRTC({
     if (!peerConnectionRef.current || !partnerId || !socket || !localStreamRef.current) return;
     
     const updateVideoTrack = async () => {
+      if (!peerConnectionRef.current || !localStreamRef.current) return;
+      
       try {
-        const senders = peerConnectionRef.current?.getSenders() || [];
+        const senders = peerConnectionRef.current.getSenders();
         const videoSender = senders.find(s => s.track && s.track.kind === 'video');
         const currentVideoTrack = localStreamRef.current.getVideoTracks()[0];
         
@@ -175,7 +209,7 @@ export function useWebRTC({
             console.log('Re-enabling video track');
             currentVideoTrack.enabled = true;
             // Renegotiate to notify remote peer
-            if (peerConnectionRef.current.signalingState === 'stable') {
+            if (peerConnectionRef.current && peerConnectionRef.current.signalingState === 'stable') {
               const offer = await peerConnectionRef.current.createOffer();
               await peerConnectionRef.current.setLocalDescription(offer);
               socket.emit('offer', {
@@ -197,19 +231,21 @@ export function useWebRTC({
               }
             } else {
               // Add new track
-              if (peerConnectionRef.current) {
+              if (peerConnectionRef.current && localStreamRef.current) {
                 peerConnectionRef.current.addTrack(newVideoTrack, localStreamRef.current);
               }
             }
             
             // Add to local stream
-            localStreamRef.current.addTrack(newVideoTrack);
-            if (localVideoRef.current) {
+            if (localStreamRef.current) {
+              localStreamRef.current.addTrack(newVideoTrack);
+            }
+            if (localVideoRef.current && localStreamRef.current) {
               localVideoRef.current.srcObject = localStreamRef.current;
             }
             
             // Renegotiate
-            if (peerConnectionRef.current.signalingState === 'stable') {
+            if (peerConnectionRef.current && peerConnectionRef.current.signalingState === 'stable') {
               const offer = await peerConnectionRef.current.createOffer();
               await peerConnectionRef.current.setLocalDescription(offer);
               socket.emit('offer', {
@@ -228,7 +264,7 @@ export function useWebRTC({
               localVideoRef.current.srcObject = null;
             }
             // Renegotiate to notify remote peer
-            if (peerConnectionRef.current.signalingState === 'stable') {
+            if (peerConnectionRef.current && peerConnectionRef.current.signalingState === 'stable') {
               const offer = await peerConnectionRef.current.createOffer();
               await peerConnectionRef.current.setLocalDescription(offer);
               socket.emit('offer', {
@@ -258,8 +294,10 @@ export function useWebRTC({
     if (!peerConnectionRef.current || !partnerId || !socket || !localStreamRef.current) return;
     
     const updateAudioTrack = async () => {
+      if (!peerConnectionRef.current || !localStreamRef.current) return;
+      
       try {
-        const senders = peerConnectionRef.current?.getSenders() || [];
+        const senders = peerConnectionRef.current.getSenders();
         const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
         const currentAudioTrack = localStreamRef.current.getAudioTracks()[0];
         
@@ -291,16 +329,18 @@ export function useWebRTC({
               }
             } else {
               // Add new track
-              if (peerConnectionRef.current) {
+              if (peerConnectionRef.current && localStreamRef.current) {
                 peerConnectionRef.current.addTrack(newAudioTrack, localStreamRef.current);
               }
             }
             
             // Add to local stream
-            localStreamRef.current.addTrack(newAudioTrack);
+            if (localStreamRef.current) {
+              localStreamRef.current.addTrack(newAudioTrack);
+            }
             
             // Renegotiate
-            if (peerConnectionRef.current.signalingState === 'stable') {
+            if (peerConnectionRef.current && peerConnectionRef.current.signalingState === 'stable') {
               const offer = await peerConnectionRef.current.createOffer();
               await peerConnectionRef.current.setLocalDescription(offer);
               socket.emit('offer', {
@@ -315,7 +355,7 @@ export function useWebRTC({
             console.log('Disabling audio track');
             currentAudioTrack.enabled = false;
             // Renegotiate to notify remote peer
-            if (peerConnectionRef.current.signalingState === 'stable') {
+            if (peerConnectionRef.current && peerConnectionRef.current.signalingState === 'stable') {
               const offer = await peerConnectionRef.current.createOffer();
               await peerConnectionRef.current.setLocalDescription(offer);
               socket.emit('offer', {
@@ -338,7 +378,7 @@ export function useWebRTC({
 
   const createOffer = async (targetId: string) => {
     if (!peerConnectionRef.current || !socket || !targetId) {
-      console.log('Cannot create offer:', { 
+      console.log('[WebRTC] Cannot create offer:', { 
         hasPeerConnection: !!peerConnectionRef.current, 
         hasSocket: !!socket, 
         targetId 
@@ -348,46 +388,95 @@ export function useWebRTC({
 
     try {
       const state = peerConnectionRef.current.signalingState;
-      console.log('Current signaling state before creating offer:', state);
+      console.log('[WebRTC] Current signaling state before creating offer:', state);
       
       // Only create offer if we're in stable state
       if (state !== 'stable') {
-        console.warn('Not in stable state, cannot create offer. Current state:', state);
+        console.warn('[WebRTC] Not in stable state, cannot create offer. Current state:', state);
         return;
       }
 
-      // Make sure we have tracks before creating offer
+      // CRITICAL: Ensure we have tracks BEFORE creating offer
       const senders = peerConnectionRef.current.getSenders();
-      if (senders.length === 0 && localStreamRef.current) {
-        console.log('Adding tracks before creating offer');
+      console.log('[WebRTC] Current senders count:', senders.length);
+      
+      if (senders.length === 0) {
+        // No tracks added yet - we MUST add them before creating offer
+        if (!localStreamRef.current) {
+          console.error('[WebRTC] No local stream available! Cannot create offer without tracks.');
+          // Try to get media first
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: isVideoEnabled,
+              audio: isAudioEnabled
+            });
+            localStreamRef.current = stream;
+            
+            // Add to local video element
+            if (localVideoRef.current) {
+              localVideoRef.current.srcObject = stream;
+              localVideoRef.current.play().catch(err => {
+                console.error('[WebRTC] Error playing local video:', err);
+              });
+            }
+          } catch (mediaError) {
+            console.error('[WebRTC] Failed to get media:', mediaError);
+            return;
+          }
+        }
+        
+        // Add all tracks to peer connection
+        console.log('[WebRTC] Adding tracks to peer connection before creating offer');
         localStreamRef.current.getTracks().forEach(track => {
-          peerConnectionRef.current?.addTrack(track, localStreamRef.current!);
+          if (peerConnectionRef.current) {
+            console.log('[WebRTC] Adding track:', track.kind, track.id);
+            peerConnectionRef.current.addTrack(track, localStreamRef.current!);
+          }
+        });
+        
+        // Verify tracks were added
+        const newSenders = peerConnectionRef.current.getSenders();
+        console.log('[WebRTC] Tracks added. New senders count:', newSenders.length);
+        if (newSenders.length === 0) {
+          console.error('[WebRTC] Failed to add tracks! Cannot create offer.');
+          return;
+        }
+      } else {
+        // Verify all tracks are enabled
+        senders.forEach(sender => {
+          if (sender.track) {
+            console.log('[WebRTC] Existing sender:', sender.track.kind, 'enabled:', sender.track.enabled);
+          }
         });
       }
 
-      console.log('Creating offer for', targetId);
+      console.log('[WebRTC] Creating offer for', targetId);
       const offer = await peerConnectionRef.current.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: true
       });
       
-      console.log('Offer created, setting local description');
+      console.log('[WebRTC] Offer created successfully:', offer.type);
+      console.log('[WebRTC] Offer SDP (first 200 chars):', offer.sdp?.substring(0, 200));
+      
+      console.log('[WebRTC] Setting local description');
       await peerConnectionRef.current.setLocalDescription(offer);
-      console.log('Local description set, signaling state:', peerConnectionRef.current.signalingState);
+      console.log('[WebRTC] Local description set, signaling state:', peerConnectionRef.current.signalingState);
 
-      console.log('Sending offer to', targetId);
+      console.log('[WebRTC] Emitting offer to', targetId);
       socket.emit('offer', {
         offer,
         targetId
       });
+      console.log('[WebRTC] Offer sent successfully');
     } catch (error) {
-      console.error('Error creating offer:', error);
+      console.error('[WebRTC] Error creating offer:', error);
     }
   };
 
   const handleOffer = async (offer: RTCSessionDescriptionInit, fromId: string) => {
     if (!peerConnectionRef.current || !socket) {
-      console.log('Cannot handle offer:', { 
+      console.log('[WebRTC] Cannot handle offer:', { 
         hasPeerConnection: !!peerConnectionRef.current, 
         hasSocket: !!socket 
       });
@@ -396,92 +485,142 @@ export function useWebRTC({
 
     try {
       const state = peerConnectionRef.current.signalingState;
-      console.log('Current signaling state before offer:', state);
+      console.log('[WebRTC] Received offer from', fromId);
+      console.log('[WebRTC] Current signaling state before offer:', state);
       
       // If we're not in stable state, we might be in the middle of another negotiation
       if (state !== 'stable') {
-        console.warn('Not in stable state, current state:', state);
+        console.warn('[WebRTC] Not in stable state, current state:', state);
         // Try to rollback or wait
         if (state === 'have-local-offer') {
           // We already sent an offer, wait a bit or rollback
-          console.log('Already have local offer, waiting...');
+          console.log('[WebRTC] Already have local offer, waiting...');
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
 
-      // Make sure we have tracks before creating answer
+      // CRITICAL: Ensure we have tracks BEFORE setting remote description and creating answer
       const senders = peerConnectionRef.current.getSenders();
-      if (senders.length === 0 && localStreamRef.current) {
-        console.log('Adding tracks before handling offer');
+      console.log('[WebRTC] Current senders count before handling offer:', senders.length);
+      
+      if (senders.length === 0) {
+        // No tracks added yet - we MUST add them
+        if (!localStreamRef.current) {
+          console.log('[WebRTC] No local stream, getting media before handling offer');
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: isVideoEnabled,
+              audio: isAudioEnabled
+            });
+            localStreamRef.current = stream;
+            
+            // Add to local video element
+            if (localVideoRef.current) {
+              localVideoRef.current.srcObject = stream;
+              localVideoRef.current.play().catch(err => {
+                console.error('[WebRTC] Error playing local video:', err);
+              });
+            }
+          } catch (mediaError) {
+            console.error('[WebRTC] Failed to get media:', mediaError);
+            return;
+          }
+        }
+        
+        // Add all tracks to peer connection
+        console.log('[WebRTC] Adding tracks to peer connection before handling offer');
         localStreamRef.current.getTracks().forEach(track => {
-          peerConnectionRef.current?.addTrack(track, localStreamRef.current!);
+          if (peerConnectionRef.current) {
+            console.log('[WebRTC] Adding track:', track.kind, track.id);
+            peerConnectionRef.current.addTrack(track, localStreamRef.current!);
+          }
         });
+        
+        // Verify tracks were added
+        const newSenders = peerConnectionRef.current.getSenders();
+        console.log('[WebRTC] Tracks added. New senders count:', newSenders.length);
       }
 
-      console.log('Setting remote offer from', fromId);
+      // Step 1: Set remote description (ontrack is already registered above)
+      console.log('[WebRTC] Setting remote offer from', fromId);
       await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(offer));
-      console.log('Remote offer set, creating answer');
+      console.log('[WebRTC] Remote offer set successfully, signaling state:', peerConnectionRef.current.signalingState);
       
+      // Step 2: Create answer
+      console.log('[WebRTC] Creating answer');
       const answer = await peerConnectionRef.current.createAnswer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: true
       });
+      console.log('[WebRTC] Answer created successfully:', answer.type);
       
-      console.log('Answer created, setting local description');
+      // Step 3: Set local description
+      console.log('[WebRTC] Setting local description (answer)');
       await peerConnectionRef.current.setLocalDescription(answer);
+      console.log('[WebRTC] Local description set, signaling state:', peerConnectionRef.current.signalingState);
 
-      console.log('Sending answer to', fromId);
+      // Step 4: Emit answer
+      console.log('[WebRTC] Emitting answer to', fromId);
       socket.emit('answer', {
         answer,
         targetId: fromId
       });
+      console.log('[WebRTC] Answer sent successfully');
     } catch (error) {
-      console.error('Error handling offer:', error);
+      console.error('[WebRTC] Error handling offer:', error);
     }
   };
 
   const handleAnswer = async (answer: RTCSessionDescriptionInit) => {
     if (!peerConnectionRef.current) {
-      console.log('No peer connection for answer');
+      console.log('[WebRTC] No peer connection for answer');
       return;
     }
 
     try {
       const state = peerConnectionRef.current.signalingState;
-      console.log('Current signaling state before answer:', state);
+      console.log('[WebRTC] Received answer');
+      console.log('[WebRTC] Current signaling state before answer:', state);
       
       // Only set remote description if we're in the right state
       if (state === 'have-local-offer') {
-        console.log('Setting remote answer');
+        console.log('[WebRTC] Setting remote answer (we have local offer)');
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
-        console.log('Remote answer set successfully, new state:', peerConnectionRef.current.signalingState);
+        console.log('[WebRTC] Remote answer set successfully, new state:', peerConnectionRef.current.signalingState);
+        console.log('[WebRTC] Connection should be established now');
       } else if (state === 'stable') {
         // If we're in stable, we might have already processed this or the offer wasn't set
-        console.warn('In stable state when answer received - offer may not have been set yet');
+        console.warn('[WebRTC] In stable state when answer received - offer may not have been set yet');
         // Wait a bit and check again
         await new Promise(resolve => setTimeout(resolve, 100));
         const newState = peerConnectionRef.current.signalingState;
         if (newState === 'have-local-offer') {
-          console.log('State changed to have-local-offer, setting answer now');
+          console.log('[WebRTC] State changed to have-local-offer, setting answer now');
           await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
         } else {
-          console.error('Still in wrong state after wait:', newState);
+          console.error('[WebRTC] Still in wrong state after wait:', newState);
         }
       } else {
-        console.warn('Cannot set remote answer, wrong state:', state);
+        console.warn('[WebRTC] Cannot set remote answer, wrong state:', state);
       }
     } catch (error) {
-      console.error('Error handling answer:', error);
+      console.error('[WebRTC] Error handling answer:', error);
     }
   };
 
   const handleIceCandidate = async (candidate: RTCIceCandidateInit) => {
-    if (!peerConnectionRef.current) return;
+    if (!peerConnectionRef.current) {
+      console.log('[WebRTC] No peer connection for ICE candidate');
+      return;
+    }
 
     try {
+      console.log('[WebRTC] Adding ICE candidate');
+      console.log('[WebRTC] Candidate:', candidate.candidate?.substring(0, 50) + '...');
       await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+      console.log('[WebRTC] ICE candidate added successfully');
     } catch (error) {
-      console.error('Error adding ICE candidate:', error);
+      console.error('[WebRTC] Error adding ICE candidate:', error);
     }
   };
 

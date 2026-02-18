@@ -29,6 +29,8 @@ export default defineConfig({
         assetFileNames: `assets/[name]-[hash].[ext]`,
       },
     },
+    // Ensure no caching during build
+    assetsInlineLimit: 0,
   },
 
   // Server configuration to disable caching
