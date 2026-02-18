@@ -10,6 +10,7 @@
       <title>ChatMyte</title>
       <script>
         // Aggressive cache clearing on each load
+        // BUT preserve Supabase auth tokens to keep users logged in
         (function() {
           // Clear all caches immediately
           if ('caches' in window) {
@@ -20,10 +21,27 @@
             });
           }
 
-          // Clear localStorage and sessionStorage
+          // Preserve Supabase auth tokens when clearing storage
           try {
+            // Find and preserve Supabase auth keys
+            const supabaseKeys = {};
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth'))) {
+                supabaseKeys[key] = localStorage.getItem(key);
+              }
+            }
+            
+            // Clear localStorage
             localStorage.clear();
-            sessionStorage.clear();
+            
+            // Restore Supabase auth keys
+            Object.keys(supabaseKeys).forEach(key => {
+              localStorage.setItem(key, supabaseKeys[key]);
+            });
+            
+            // DON'T clear sessionStorage - Supabase might use it
+            // sessionStorage.clear(); // Commented out to preserve auth
           } catch (e) {
             console.warn('Could not clear storage:', e);
           }

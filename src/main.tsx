@@ -16,20 +16,36 @@ if ('serviceWorker' in navigator) {
 }
 
   // Clear all storage and caches on each load
+  // BUT preserve Supabase auth tokens to keep users logged in
   try {
-    // Clear localStorage (except for critical data if needed)
-    const criticalKeys: string[] = ['app_version']; // Preserve app version
+    // Preserve Supabase auth tokens and app version
+    const criticalKeys: string[] = ['app_version'];
+    
+    // Find all Supabase auth-related keys (they start with 'sb-' or contain 'supabase')
+    const supabaseKeys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth'))) {
+        supabaseKeys.push(key);
+      }
+    }
+    
+    // Combine critical keys with Supabase keys
+    const keysToPreserve = [...criticalKeys, ...supabaseKeys];
+    
+    // Clear localStorage (except for critical data and Supabase auth)
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && !criticalKeys.includes(key)) {
+      if (key && !keysToPreserve.includes(key)) {
         keysToRemove.push(key);
       }
     }
     keysToRemove.forEach(key => localStorage.removeItem(key));
 
-    // Clear sessionStorage
-    sessionStorage.clear();
+    // DON'T clear sessionStorage - Supabase might use it for auth
+    // Only clear if it's not related to auth
+    // sessionStorage.clear(); // Commented out to preserve auth
 
     // Clear all caches
     if ('caches' in window) {

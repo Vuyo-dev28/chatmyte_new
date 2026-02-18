@@ -29,17 +29,21 @@ export async function getActiveSubscription(): Promise<Subscription | null> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
-    // Fix: Use a simpler query to avoid 406 errors
-    // Get active subscriptions and filter expired ones in the query
+    // Optimized: Get only the most recent active subscription
+    // Use limit(1) to minimize data transfer and improve speed
     const { data, error } = await supabase
       .from('subscriptions')
       .select('*')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .order('started_at', { ascending: false })
-      .limit(10); // Get more to filter client-side if needed
+      .limit(1); // Only get the most recent one - much faster
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        // No subscription found - this is normal for free users
+        return null;
+      }
       console.error('Error fetching subscription:', error);
       return null;
     }
@@ -48,25 +52,13 @@ export async function getActiveSubscription(): Promise<Subscription | null> {
       return null;
     }
 
-    // Filter out expired subscriptions client-side
-    const now = new Date();
-    const activeSubscription = data.find(sub => {
-      if (!sub.expires_at) return true; // No expiration = active
-      return new Date(sub.expires_at) > now;
-    });
-
-    return activeSubscription as Subscription | null;
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        // No subscription found
-        return null;
-      }
-      console.error('Error fetching subscription:', error);
-      return null;
+    // Quick client-side expiration check (faster than server-side filter)
+    const subscription = data[0];
+    if (subscription.expires_at && new Date(subscription.expires_at) <= new Date()) {
+      return null; // Expired
     }
 
-    return data as Subscription;
+    return subscription as Subscription;
   } catch (error) {
     console.error('Error getting active subscription:', error);
     return null;
