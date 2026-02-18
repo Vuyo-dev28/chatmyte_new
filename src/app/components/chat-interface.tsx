@@ -39,7 +39,7 @@ export function ChatInterface() {
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isUserViewMain, setIsUserViewMain] = useState(false); // false = stranger is main, true = user is main
   const [showMessagesInVideo, setShowMessagesInVideo] = useState(false);
-  const [hasRemoteVideo, setHasRemoteVideo] = useState(false); // Track if remote video stream is available
+  const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -56,38 +56,6 @@ export function ChatInterface() {
   
   // WebRTC - Initialize remote video ref
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  
-  // Monitor remote video stream
-  useEffect(() => {
-    if (!remoteVideoRef.current) return;
-    
-    const video = remoteVideoRef.current;
-    
-    const checkStream = () => {
-      const hasStream = video.srcObject !== null && 
-                       video.srcObject instanceof MediaStream && 
-                       video.srcObject.getVideoTracks().length > 0;
-      setHasRemoteVideo(hasStream);
-      console.log('[Video] Remote video stream status:', hasStream);
-    };
-    
-    // Check initially
-    checkStream();
-    
-    // Monitor for stream changes
-    const observer = new MutationObserver(checkStream);
-    observer.observe(video, { attributes: true, attributeFilter: ['src'] });
-    
-    // Also listen to loadedmetadata event
-    video.addEventListener('loadedmetadata', checkStream);
-    video.addEventListener('play', checkStream);
-    
-    return () => {
-      observer.disconnect();
-      video.removeEventListener('loadedmetadata', checkStream);
-      video.removeEventListener('play', checkStream);
-    };
-  }, [stranger, partnerId]);
   
   // WebRTC
   const { createOffer, handleOffer, handleAnswer, handleIceCandidate } = useWebRTC({
@@ -136,6 +104,46 @@ export function ChatInterface() {
       videoRef.current.srcObject = null;
     }
   }, [isVideoEnabled]);
+
+  // Monitor remote video stream
+  useEffect(() => {
+    if (remoteVideoRef.current) {
+      const video = remoteVideoRef.current;
+      const checkStream = () => {
+        if (video.srcObject) {
+          const stream = video.srcObject as MediaStream;
+          const hasVideoTrack = stream.getVideoTracks().length > 0;
+          const hasActiveTrack = stream.getVideoTracks().some(track => track.readyState === 'live');
+          
+          if (hasVideoTrack && hasActiveTrack) {
+            setHasRemoteVideo(true);
+            console.log('[ChatInterface] Remote video stream detected and active');
+          } else {
+            setHasRemoteVideo(false);
+            console.log('[ChatInterface] Remote video stream not active');
+          }
+        } else {
+          setHasRemoteVideo(false);
+        }
+      };
+
+      // Check immediately
+      checkStream();
+
+      // Check periodically
+      const interval = setInterval(checkStream, 1000);
+
+      // Also check on play/pause events
+      video.addEventListener('play', checkStream);
+      video.addEventListener('pause', checkStream);
+
+      return () => {
+        clearInterval(interval);
+        video.removeEventListener('play', checkStream);
+        video.removeEventListener('pause', checkStream);
+      };
+    }
+  }, [stranger, partnerId]);
 
   useEffect(() => {
     // Simulate accessing user's camera for video mode
@@ -222,7 +230,7 @@ export function ChatInterface() {
       // This prevents both users from creating offers simultaneously
       const mySocketId = socket.id;
       const partnerSocketId = data.partnerId;
-      const shouldCreateOffer = mySocketId && partnerSocketId ? mySocketId < partnerSocketId : false;
+      const shouldCreateOffer = mySocketId < partnerSocketId;
       
       console.log('Socket IDs:', { mine: mySocketId, partner: partnerSocketId, shouldCreateOffer });
       
@@ -268,7 +276,7 @@ export function ChatInterface() {
       partnerIdRef.current = null;
       setPartnerId(null);
       setMessages([]);
-      setHasRemoteVideo(false); // Reset remote video state
+      setHasRemoteVideo(false);
       // Automatically start searching for a new connection
       setIsConnecting(true);
       // The server will automatically put us back in queue and find a match
@@ -280,7 +288,7 @@ export function ChatInterface() {
       partnerIdRef.current = null;
       setPartnerId(null);
       setMessages([]);
-      setHasRemoteVideo(false); // Reset remote video state
+      setHasRemoteVideo(false);
       // Automatically start searching for a new connection
       setIsConnecting(true);
       // The server will automatically put us back in queue and find a match
@@ -293,6 +301,7 @@ export function ChatInterface() {
       setPartnerId(null);
       setIsConnecting(false);
       setMessages([]);
+      setHasRemoteVideo(false);
     });
 
     return () => {
@@ -705,35 +714,34 @@ export function ChatInterface() {
                               muted={false}
                               className="absolute inset-0 w-full h-full object-cover z-0"
                               onLoadedMetadata={(e) => {
-                                console.log('[Video] Remote video metadata loaded');
+                                console.log('[ChatInterface] Remote video metadata loaded');
+                                setHasRemoteVideo(true);
                                 e.currentTarget.play().catch(err => {
-                                  console.error('[Video] Error playing remote video on load:', err);
+                                  console.error('Error playing remote video on load:', err);
                                 });
                               }}
                               onPlay={() => {
-                                console.log('[Video] Remote video started playing');
+                                console.log('[ChatInterface] Remote video started playing');
                                 setHasRemoteVideo(true);
                               }}
                               onPause={() => {
-                                console.log('[Video] Remote video paused');
+                                console.log('[ChatInterface] Remote video paused');
                               }}
                               onError={(e) => {
-                                console.error('[Video] Remote video error:', e);
+                                console.error('[ChatInterface] Remote video error:', e);
+                                setHasRemoteVideo(false);
                               }}
                             />
                   <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent z-1"></div>
                             {/* Fallback avatar - only show when no video */}
-                            {!hasRemoteVideo && (
-                              <div className="absolute inset-0 flex items-center justify-center z-10">
-                                <div className="text-center px-6">
-                                  <div className="w-40 h-40 bg-gradient-to-br from-yellow-500 to-yellow-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <p className="text-6xl text-black">{stranger.name[0]}</p>
-                                  </div>
-                                  <p className="text-yellow-200 text-2xl">{stranger.name}, {stranger.age}</p>
-                                  <p className="text-yellow-400/70 text-sm mt-2">Waiting for video...</p>
+                            <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${hasRemoteVideo ? 'opacity-0 pointer-events-none' : 'opacity-100'} z-10`}>
+                              <div className="text-center z-10 px-6">
+                                <div className="w-40 h-40 bg-gradient-to-br from-yellow-500 to-yellow-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                                  <p className="text-6xl text-black">{stranger.name[0]}</p>
                                 </div>
+                                <p className="text-yellow-200 text-2xl">{stranger.name}, {stranger.age}</p>
                               </div>
-                            )}
+                            </div>
                             <div className="absolute top-3 left-3 bg-black/70 px-3 py-1 rounded-full border border-yellow-600/30 z-20">
                               <p className="text-yellow-400 text-xs">Stranger</p>
                             </div>
@@ -884,34 +892,33 @@ export function ChatInterface() {
                               muted={false}
                               className="absolute inset-0 w-full h-full object-cover z-0"
                               onLoadedMetadata={(e) => {
-                                console.log('[Video] Remote video metadata loaded (desktop)');
+                                console.log('[ChatInterface] Remote video metadata loaded (desktop)');
+                                setHasRemoteVideo(true);
                                 e.currentTarget.play().catch(err => {
-                                  console.error('[Video] Error playing remote video on load:', err);
+                                  console.error('Error playing remote video on load:', err);
                                 });
                               }}
                               onPlay={() => {
-                                console.log('[Video] Remote video started playing (desktop)');
+                                console.log('[ChatInterface] Remote video started playing (desktop)');
                                 setHasRemoteVideo(true);
                               }}
                               onPause={() => {
-                                console.log('[Video] Remote video paused (desktop)');
+                                console.log('[ChatInterface] Remote video paused (desktop)');
                               }}
                               onError={(e) => {
-                                console.error('[Video] Remote video error (desktop):', e);
+                                console.error('[ChatInterface] Remote video error (desktop):', e);
+                                setHasRemoteVideo(false);
                               }}
                             />
                             {/* Fallback avatar when no video */}
-                            {!hasRemoteVideo && (
-                              <div className="absolute inset-0 flex items-center justify-center z-10">
-                                <div className="text-center">
-                                  <div className="w-20 h-20 sm:w-32 sm:h-32 bg-gradient-to-br from-yellow-500 to-yellow-700 rounded-full flex items-center justify-center mx-auto mb-2 sm:mb-4">
-                                    <p className="text-3xl sm:text-5xl text-black">{stranger.name[0]}</p>
-                                  </div>
-                                  <p className="text-yellow-200 text-base sm:text-xl">{stranger.name}, {stranger.age}</p>
-                                  <p className="text-yellow-400/70 text-xs sm:text-sm mt-2">Waiting for video...</p>
+                            <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${hasRemoteVideo ? 'opacity-0 pointer-events-none' : 'opacity-100'} z-10`}>
+                              <div className="text-center z-10">
+                                <div className="w-20 h-20 sm:w-32 sm:h-32 bg-gradient-to-br from-yellow-500 to-yellow-700 rounded-full flex items-center justify-center mx-auto mb-2 sm:mb-4">
+                                  <p className="text-3xl sm:text-5xl text-black">{stranger.name[0]}</p>
                                 </div>
+                                <p className="text-yellow-200 text-base sm:text-xl">{stranger.name}, {stranger.age}</p>
                               </div>
-                            )}
+                            </div>
                             <div className="absolute top-2 left-2 sm:top-4 sm:left-4 bg-black/70 px-2 py-1 sm:px-3 sm:py-1 rounded-full z-20">
                               <p className="text-yellow-400 text-xs sm:text-sm">Stranger</p>
                   </div>

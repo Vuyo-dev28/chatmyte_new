@@ -3,8 +3,8 @@ import { Socket } from 'socket.io-client';
 
 interface UseWebRTCOptions {
   socket: Socket | null;
-  localVideoRef: React.RefObject<HTMLVideoElement | null>;
-  remoteVideoRef: React.RefObject<HTMLVideoElement | null>;
+  localVideoRef: React.RefObject<HTMLVideoElement>;
+  remoteVideoRef: React.RefObject<HTMLVideoElement>;
   isVideoEnabled: boolean;
   isAudioEnabled: boolean;
   partnerId: string | null;
@@ -78,18 +78,19 @@ export function useWebRTC({
 
     // Handle remote stream - MUST be registered before setting remote description
     peerConnectionRef.current.ontrack = (event) => {
-      console.log('[WebRTC] ontrack event fired!');
+      console.log('[WebRTC] ========== ontrack event fired! ==========');
       console.log('[WebRTC] Track kind:', event.track.kind);
       console.log('[WebRTC] Track id:', event.track.id);
       console.log('[WebRTC] Streams count:', event.streams.length);
       console.log('[WebRTC] Track enabled:', event.track.enabled);
       console.log('[WebRTC] Track readyState:', event.track.readyState);
+      console.log('[WebRTC] Event streams:', event.streams);
       
       if (remoteVideoRef.current) {
         let streamToSet: MediaStream | null = null;
         
         if (event.streams && event.streams.length > 0) {
-          console.log('[WebRTC] Setting remote video stream from event.streams[0]');
+          console.log('[WebRTC] Using stream from event.streams[0]');
           streamToSet = event.streams[0];
         } else if (event.track) {
           // Fallback: create a new stream from the track
@@ -98,31 +99,60 @@ export function useWebRTC({
         }
         
         if (streamToSet) {
-          // Check if this is a video track
-          const hasVideoTrack = streamToSet.getVideoTracks().length > 0;
-          console.log('[WebRTC] Stream has video track:', hasVideoTrack);
-          console.log('[WebRTC] Video tracks:', streamToSet.getVideoTracks().map(t => ({ id: t.id, enabled: t.enabled, readyState: t.readyState })));
+          console.log('[WebRTC] Setting remote video srcObject');
+          console.log('[WebRTC] Stream ID:', streamToSet.id);
+          console.log('[WebRTC] Stream tracks:', streamToSet.getTracks().map(t => ({ kind: t.kind, id: t.id, enabled: t.enabled })));
           
           remoteVideoRef.current.srcObject = streamToSet;
           
-          // Force play with error handling
-          remoteVideoRef.current.play()
-            .then(() => {
+          // Ensure video element is visible and playing
+          remoteVideoRef.current.style.display = 'block';
+          remoteVideoRef.current.style.zIndex = '1';
+          
+          // Force play with multiple attempts
+          const playVideo = async () => {
+            try {
+              await remoteVideoRef.current!.play();
               console.log('[WebRTC] ✅ Remote video playing successfully');
-              console.log('[WebRTC] Video element dimensions:', {
-                videoWidth: remoteVideoRef.current?.videoWidth,
-                videoHeight: remoteVideoRef.current?.videoHeight,
-                readyState: remoteVideoRef.current?.readyState
-              });
-            })
-            .catch(err => {
+              
+              // Verify video is actually playing
+              if (remoteVideoRef.current) {
+                console.log('[WebRTC] Video element state:', {
+                  paused: remoteVideoRef.current.paused,
+                  readyState: remoteVideoRef.current.readyState,
+                  videoWidth: remoteVideoRef.current.videoWidth,
+                  videoHeight: remoteVideoRef.current.videoHeight,
+                  srcObject: !!remoteVideoRef.current.srcObject
+                });
+              }
+            } catch (err: any) {
               console.error('[WebRTC] ❌ Error playing remote video:', err);
-            });
+              // Retry after a short delay
+              setTimeout(() => {
+                if (remoteVideoRef.current) {
+                  remoteVideoRef.current.play().catch(e => {
+                    console.error('[WebRTC] Retry failed:', e);
+                  });
+                }
+              }, 500);
+            }
+          };
+          
+          // Wait for metadata to load before playing
+          if (remoteVideoRef.current.readyState >= 2) {
+            // Already has metadata
+            playVideo();
+          } else {
+            remoteVideoRef.current.onloadedmetadata = () => {
+              console.log('[WebRTC] Video metadata loaded');
+              playVideo();
+            };
+          }
         } else {
-          console.warn('[WebRTC] No stream to set!');
+          console.warn('[WebRTC] No stream or track available in ontrack event');
         }
       } else {
-        console.warn('[WebRTC] remoteVideoRef.current is null! Cannot set remote stream.');
+        console.warn('[WebRTC] ⚠️ remoteVideoRef.current is null! Cannot set remote stream.');
       }
     };
 
@@ -196,10 +226,8 @@ export function useWebRTC({
     if (!peerConnectionRef.current || !partnerId || !socket || !localStreamRef.current) return;
     
     const updateVideoTrack = async () => {
-      if (!peerConnectionRef.current || !localStreamRef.current) return;
-      
       try {
-        const senders = peerConnectionRef.current.getSenders();
+        const senders = peerConnectionRef.current?.getSenders() || [];
         const videoSender = senders.find(s => s.track && s.track.kind === 'video');
         const currentVideoTrack = localStreamRef.current.getVideoTracks()[0];
         
@@ -209,7 +237,7 @@ export function useWebRTC({
             console.log('Re-enabling video track');
             currentVideoTrack.enabled = true;
             // Renegotiate to notify remote peer
-            if (peerConnectionRef.current && peerConnectionRef.current.signalingState === 'stable') {
+            if (peerConnectionRef.current.signalingState === 'stable') {
               const offer = await peerConnectionRef.current.createOffer();
               await peerConnectionRef.current.setLocalDescription(offer);
               socket.emit('offer', {
@@ -231,21 +259,19 @@ export function useWebRTC({
               }
             } else {
               // Add new track
-              if (peerConnectionRef.current && localStreamRef.current) {
+              if (peerConnectionRef.current) {
                 peerConnectionRef.current.addTrack(newVideoTrack, localStreamRef.current);
               }
             }
             
             // Add to local stream
-            if (localStreamRef.current) {
-              localStreamRef.current.addTrack(newVideoTrack);
-            }
-            if (localVideoRef.current && localStreamRef.current) {
+            localStreamRef.current.addTrack(newVideoTrack);
+            if (localVideoRef.current) {
               localVideoRef.current.srcObject = localStreamRef.current;
             }
             
             // Renegotiate
-            if (peerConnectionRef.current && peerConnectionRef.current.signalingState === 'stable') {
+            if (peerConnectionRef.current.signalingState === 'stable') {
               const offer = await peerConnectionRef.current.createOffer();
               await peerConnectionRef.current.setLocalDescription(offer);
               socket.emit('offer', {
@@ -264,7 +290,7 @@ export function useWebRTC({
               localVideoRef.current.srcObject = null;
             }
             // Renegotiate to notify remote peer
-            if (peerConnectionRef.current && peerConnectionRef.current.signalingState === 'stable') {
+            if (peerConnectionRef.current.signalingState === 'stable') {
               const offer = await peerConnectionRef.current.createOffer();
               await peerConnectionRef.current.setLocalDescription(offer);
               socket.emit('offer', {
@@ -294,10 +320,8 @@ export function useWebRTC({
     if (!peerConnectionRef.current || !partnerId || !socket || !localStreamRef.current) return;
     
     const updateAudioTrack = async () => {
-      if (!peerConnectionRef.current || !localStreamRef.current) return;
-      
       try {
-        const senders = peerConnectionRef.current.getSenders();
+        const senders = peerConnectionRef.current?.getSenders() || [];
         const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
         const currentAudioTrack = localStreamRef.current.getAudioTracks()[0];
         
@@ -329,18 +353,16 @@ export function useWebRTC({
               }
             } else {
               // Add new track
-              if (peerConnectionRef.current && localStreamRef.current) {
+              if (peerConnectionRef.current) {
                 peerConnectionRef.current.addTrack(newAudioTrack, localStreamRef.current);
               }
             }
             
             // Add to local stream
-            if (localStreamRef.current) {
-              localStreamRef.current.addTrack(newAudioTrack);
-            }
+            localStreamRef.current.addTrack(newAudioTrack);
             
             // Renegotiate
-            if (peerConnectionRef.current && peerConnectionRef.current.signalingState === 'stable') {
+            if (peerConnectionRef.current.signalingState === 'stable') {
               const offer = await peerConnectionRef.current.createOffer();
               await peerConnectionRef.current.setLocalDescription(offer);
               socket.emit('offer', {
@@ -355,7 +377,7 @@ export function useWebRTC({
             console.log('Disabling audio track');
             currentAudioTrack.enabled = false;
             // Renegotiate to notify remote peer
-            if (peerConnectionRef.current && peerConnectionRef.current.signalingState === 'stable') {
+            if (peerConnectionRef.current.signalingState === 'stable') {
               const offer = await peerConnectionRef.current.createOffer();
               await peerConnectionRef.current.setLocalDescription(offer);
               socket.emit('offer', {
