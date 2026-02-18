@@ -52,17 +52,19 @@ export function useWebRTC({
       if (event.candidate && socket) {
         const currentPartnerId = partnerIdRef.current;
         if (currentPartnerId) {
-          console.log('[WebRTC] Sending ICE candidate to', currentPartnerId);
-          console.log('[WebRTC] Candidate:', event.candidate.candidate?.substring(0, 50) + '...');
+          console.log('[WebRTC] 🧊 Sending ICE candidate to', currentPartnerId);
+          console.log('[WebRTC] Candidate:', event.candidate.candidate?.substring(0, 100) + '...');
+          console.log('[WebRTC] Candidate type:', event.candidate.type);
           socket.emit('ice-candidate', {
             candidate: event.candidate,
             targetId: currentPartnerId
           });
         } else {
-          console.log('[WebRTC] No partnerId, cannot send ICE candidate');
+          console.warn('[WebRTC] ⚠️ No partnerId, cannot send ICE candidate');
+          console.warn('[WebRTC] partnerIdRef.current:', partnerIdRef.current);
         }
       } else if (!event.candidate) {
-        console.log('[WebRTC] ICE candidate gathering complete (null candidate)');
+        console.log('[WebRTC] ✅ ICE candidate gathering complete (null candidate)');
       }
     };
 
@@ -117,13 +119,35 @@ export function useWebRTC({
               
               // Verify video is actually playing
               if (remoteVideoRef.current) {
-                console.log('[WebRTC] Video element state:', {
+                const videoState = {
                   paused: remoteVideoRef.current.paused,
                   readyState: remoteVideoRef.current.readyState,
                   videoWidth: remoteVideoRef.current.videoWidth,
                   videoHeight: remoteVideoRef.current.videoHeight,
-                  srcObject: !!remoteVideoRef.current.srcObject
-                });
+                  srcObject: !!remoteVideoRef.current.srcObject,
+                  currentTime: remoteVideoRef.current.currentTime
+                };
+                console.log('[WebRTC] Video element state:', videoState);
+                
+                // Check if video has dimensions (means frames are being received)
+                if (remoteVideoRef.current.videoWidth > 0 && remoteVideoRef.current.videoHeight > 0) {
+                  console.log('[WebRTC] ✅ Video has dimensions - frames are being received!');
+                } else {
+                  console.warn('[WebRTC] ⚠️ Video dimensions are 0x0 - no frames received yet');
+                }
+                
+                // Monitor video dimensions periodically
+                const checkDimensions = setInterval(() => {
+                  if (remoteVideoRef.current) {
+                    if (remoteVideoRef.current.videoWidth > 0 && remoteVideoRef.current.videoHeight > 0) {
+                      console.log('[WebRTC] ✅ Video dimensions:', remoteVideoRef.current.videoWidth, 'x', remoteVideoRef.current.videoHeight);
+                      clearInterval(checkDimensions);
+                    }
+                  }
+                }, 500);
+                
+                // Stop checking after 10 seconds
+                setTimeout(() => clearInterval(checkDimensions), 10000);
               }
             } catch (err: any) {
               console.error('[WebRTC] ❌ Error playing remote video:', err);
@@ -170,9 +194,16 @@ export function useWebRTC({
   useEffect(() => {
     const getMedia = async () => {
       try {
+        console.log('[WebRTC] ========== Getting user media ==========');
+        console.log('[WebRTC] Video enabled:', isVideoEnabled, 'Audio enabled:', isAudioEnabled);
+        
         // Stop existing stream first
         if (localStreamRef.current) {
-          localStreamRef.current.getTracks().forEach(track => track.stop());
+          console.log('[WebRTC] Stopping existing stream tracks');
+          localStreamRef.current.getTracks().forEach(track => {
+            console.log('[WebRTC] Stopping track:', track.kind, track.id);
+            track.stop();
+          });
         }
 
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -180,21 +211,118 @@ export function useWebRTC({
           audio: isAudioEnabled
         });
 
+        console.log('[WebRTC] ✅ getUserMedia successful');
+        console.log('[WebRTC] Stream ID:', stream.id);
+        console.log('[WebRTC] Local stream tracks:', stream.getTracks().map(t => ({
+          kind: t.kind,
+          id: t.id,
+          enabled: t.enabled,
+          readyState: t.readyState,
+          label: t.label
+        })));
+
         localStreamRef.current = stream;
 
         if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-          localVideoRef.current.play().catch(err => {
-            console.error('Error playing local video:', err);
+          console.log('[WebRTC] Setting local video srcObject');
+          console.log('[WebRTC] Video element exists:', !!localVideoRef.current);
+          console.log('[WebRTC] Video element attributes:', {
+            autoplay: localVideoRef.current.autoplay,
+            muted: localVideoRef.current.muted,
+            playsInline: localVideoRef.current.playsInline
           });
+          
+          // Set srcObject
+          localVideoRef.current.srcObject = stream;
+          
+          // Verify srcObject was set
+          if (localVideoRef.current.srcObject) {
+            console.log('[WebRTC] ✅ Local video srcObject set successfully');
+            console.log('[WebRTC] Stream ID:', (localVideoRef.current.srcObject as MediaStream).id);
+            
+            // Force play with retry logic
+            const playVideo = async () => {
+              try {
+                await localVideoRef.current!.play();
+                console.log('[WebRTC] ✅ Local video playing');
+                
+                // Wait a bit and check dimensions
+                setTimeout(() => {
+                  if (localVideoRef.current) {
+                    const dims = {
+                      videoWidth: localVideoRef.current.videoWidth,
+                      videoHeight: localVideoRef.current.videoHeight,
+                      paused: localVideoRef.current.paused,
+                      readyState: localVideoRef.current.readyState
+                    };
+                    console.log('[WebRTC] Local video dimensions:', dims);
+                    
+                    if (dims.videoWidth > 0 && dims.videoHeight > 0) {
+                      console.log('[WebRTC] ✅ Video feed is displaying!');
+                    } else {
+                      console.warn('[WebRTC] ⚠️ Video dimensions are 0x0 - feed may not be visible');
+                    }
+                  }
+                }, 500);
+              } catch (err: any) {
+                console.error('[WebRTC] ❌ Error playing local video:', err);
+                console.error('[WebRTC] Error name:', err.name);
+                console.error('[WebRTC] Error message:', err.message);
+                
+                // Retry after a short delay
+                setTimeout(() => {
+                  if (localVideoRef.current && localVideoRef.current.srcObject) {
+                    localVideoRef.current.play().catch(e => {
+                      console.error('[WebRTC] Retry failed:', e);
+                    });
+                  }
+                }, 1000);
+              }
+            };
+            
+            // Try to play immediately
+            playVideo();
+            
+            // Also set up event listeners
+            localVideoRef.current.onloadedmetadata = () => {
+              console.log('[WebRTC] Local video metadata loaded');
+              playVideo();
+            };
+            
+            localVideoRef.current.onplay = () => {
+              console.log('[WebRTC] ✅ Local video started playing (onplay event)');
+            };
+            
+            localVideoRef.current.onerror = (e) => {
+              console.error('[WebRTC] ❌ Local video error event:', e);
+            };
+          } else {
+            console.error('[WebRTC] ❌ Failed to set local video srcObject');
+          }
+        } else {
+          console.warn('[WebRTC] ⚠️ localVideoRef.current is null - video element not mounted yet');
+          // Retry after a short delay
+          setTimeout(() => {
+            if (localVideoRef.current && localStreamRef.current) {
+              console.log('[WebRTC] Retrying to set local video srcObject');
+              localVideoRef.current.srcObject = localStreamRef.current;
+              localVideoRef.current.play().catch(err => {
+                console.error('[WebRTC] Retry play error:', err);
+              });
+            }
+          }, 500);
         }
 
         // Remove old tracks and add new ones
         if (peerConnectionRef.current) {
+          console.log('[WebRTC] Adding tracks to peer connection');
+          
           // Remove existing senders
           const senders = peerConnectionRef.current.getSenders();
+          console.log('[WebRTC] Existing senders count:', senders.length);
           senders.forEach(sender => {
             if (sender.track) {
+              console.log('[WebRTC] Removing old sender:', sender.track.kind);
               peerConnectionRef.current?.removeTrack(sender);
             }
           });
@@ -202,18 +330,38 @@ export function useWebRTC({
           // Add new tracks
           stream.getTracks().forEach(track => {
             if (peerConnectionRef.current) {
-              console.log('Adding track to peer connection:', track.kind);
+              console.log('[WebRTC] ➕ Adding track to peer connection:', track.kind, track.id);
               peerConnectionRef.current.addTrack(track, stream);
             }
           });
+          
+          // Verify tracks were added
+          const newSenders = peerConnectionRef.current.getSenders();
+          console.log('[WebRTC] New senders count:', newSenders.length);
+          newSenders.forEach(sender => {
+            if (sender.track) {
+              console.log('[WebRTC] Sender track:', sender.track.kind, sender.track.id, 'enabled:', sender.track.enabled);
+            }
+          });
+        } else {
+          console.warn('[WebRTC] ⚠️ peerConnectionRef.current is null, cannot add tracks');
         }
-      } catch (error) {
-        console.error('Error accessing media devices:', error);
+      } catch (error: any) {
+        console.error('[WebRTC] ❌ Error accessing media devices:', error);
+        console.error('[WebRTC] Error name:', error.name);
+        console.error('[WebRTC] Error message:', error.message);
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+          console.error('[WebRTC] ❌ Camera/microphone permission denied');
+        } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+          console.error('[WebRTC] ❌ No camera/microphone found');
+        }
       }
     };
 
     if (socket && peerConnectionRef.current) {
       getMedia();
+    } else {
+      console.log('[WebRTC] Skipping getMedia - socket:', !!socket, 'peerConnection:', !!peerConnectionRef.current);
     }
 
     return () => {

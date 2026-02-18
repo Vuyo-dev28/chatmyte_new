@@ -97,14 +97,6 @@ export function ChatInterface() {
     }
   };
 
-  // Clear video element when camera is turned off
-  useEffect(() => {
-    if (!isVideoEnabled && videoRef.current) {
-      // Clear the video element to prevent frozen frame
-      videoRef.current.srcObject = null;
-    }
-  }, [isVideoEnabled]);
-
   // Monitor remote video stream
   useEffect(() => {
     if (remoteVideoRef.current) {
@@ -145,71 +137,26 @@ export function ChatInterface() {
     }
   }, [stranger, partnerId]);
 
+  // Note: getUserMedia is now handled by useWebRTC hook
+  // This effect ensures the video element displays the stream from useWebRTC
   useEffect(() => {
-    // Simulate accessing user's camera for video mode
-    if (mode === 'video' && isVideoEnabled) {
-      navigator.mediaDevices.getUserMedia({ video: true, audio: isAudioEnabled })
-        .then(stream => {
-          streamRef.current = stream;
-          // Use setTimeout to ensure video element is mounted
-          setTimeout(() => {
-            if (videoRef.current && streamRef.current) {
-              videoRef.current.srcObject = streamRef.current;
-            }
-          }, 0);
-        })
-        .catch(err => {
-          console.log('Camera access denied or not available');
-        });
-    } else {
-      // Stop stream when video is disabled
-      if (streamRef.current) {
-        const tracks = streamRef.current.getTracks();
-        tracks.forEach(track => track.stop());
-        streamRef.current = null;
-      }
-      // Clear video element
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
+    // The useWebRTC hook manages the stream, but we need to ensure
+    // the video element is properly connected when it becomes available
+    if (mode === 'video' && videoRef.current) {
+      // Check if video element has a stream but isn't playing
+      const video = videoRef.current;
+      if (video.srcObject && video.paused) {
+        console.log('[ChatInterface] Video has srcObject but is paused, attempting to play');
+        video.play()
+          .then(() => {
+            console.log('[ChatInterface] ✅ Local video started playing');
+          })
+          .catch(err => {
+            console.error('[ChatInterface] ❌ Error playing local video:', err);
+          });
       }
     }
-
-    return () => {
-      // Only cleanup on unmount, not on every change
-      if (mode !== 'video' || !isVideoEnabled) {
-        if (streamRef.current) {
-          const tracks = streamRef.current.getTracks();
-        tracks.forEach(track => track.stop());
-          streamRef.current = null;
-        }
-        if (videoRef.current) {
-          videoRef.current.srcObject = null;
-        }
-      }
-    };
-  }, [mode, isVideoEnabled, isAudioEnabled]);
-
-  // Reattach stream when video element moves or view swaps
-  useEffect(() => {
-    if (mode === 'video' && isVideoEnabled && streamRef.current) {
-      // Use a small delay to ensure video element is mounted after swap
-      const timeoutId = setTimeout(() => {
-        if (videoRef.current && streamRef.current) {
-          const currentStream = videoRef.current.srcObject as MediaStream;
-          // Only reattach if stream is different or missing
-          if (!currentStream || (currentStream.id !== streamRef.current.id)) {
-            videoRef.current.srcObject = streamRef.current;
-            // Force play to ensure video continues
-            videoRef.current.play().catch(err => {
-              console.log('Video play error:', err);
-            });
-          }
-        }
-      }, 50);
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [isUserViewMain, mode, isVideoEnabled, stranger]);
+  }, [mode, isVideoEnabled, stranger]);
 
   // Socket event handlers
   useEffect(() => {
@@ -235,12 +182,19 @@ export function ChatInterface() {
       console.log('Socket IDs:', { mine: mySocketId, partner: partnerSocketId, shouldCreateOffer });
       
       // Start WebRTC connection after a short delay to ensure state is updated
+      // Ensure we have media tracks before creating offer
       setTimeout(async () => {
         if (shouldCreateOffer && data.partnerId && createOffer) {
-          console.log('I am the offerer, creating WebRTC offer to', data.partnerId);
+          console.log('[ChatInterface] I am the offerer, creating WebRTC offer to', data.partnerId);
+          console.log('[ChatInterface] Waiting for media tracks to be ready...');
+          
+          // Wait a bit more to ensure tracks are added
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          console.log('[ChatInterface] Creating offer now');
           await createOffer(data.partnerId);
         } else {
-          console.log('I am the answerer, waiting for offer from', data.partnerId);
+          console.log('[ChatInterface] I am the answerer, waiting for offer from', data.partnerId);
         }
       }, 500);
     });
@@ -260,14 +214,22 @@ export function ChatInterface() {
     });
 
     socket.on('offer', async (data: { offer: RTCSessionDescriptionInit; fromId: string }) => {
+      console.log('[ChatInterface] 📨 Received offer from', data.fromId);
+      console.log('[ChatInterface] Offer type:', data.offer.type);
+      console.log('[ChatInterface] Offer SDP (first 200 chars):', data.offer.sdp?.substring(0, 200));
       await handleOffer(data.offer, data.fromId);
     });
 
     socket.on('answer', async (data: { answer: RTCSessionDescriptionInit }) => {
+      console.log('[ChatInterface] 📨 Received answer');
+      console.log('[ChatInterface] Answer type:', data.answer.type);
+      console.log('[ChatInterface] Answer SDP (first 200 chars):', data.answer.sdp?.substring(0, 200));
       await handleAnswer(data.answer);
     });
 
     socket.on('ice-candidate', async (data: { candidate: RTCIceCandidateInit }) => {
+      console.log('[ChatInterface] 🧊 Received ICE candidate');
+      console.log('[ChatInterface] Candidate:', data.candidate.candidate?.substring(0, 100));
       await handleIceCandidate(data.candidate);
     });
 
