@@ -596,19 +596,30 @@ export function useWebRTC({
         }
         
         // Add all tracks to peer connection
-        console.log('[WebRTC] Adding tracks to peer connection before creating offer');
+        console.log('[WebRTC] ➕ Adding tracks to peer connection before creating offer (OFFERER)');
+        const tracksToAdd: string[] = [];
         localStreamRef.current.getTracks().forEach(track => {
-          if (peerConnectionRef.current) {
-            console.log('[WebRTC] Adding track:', track.kind, track.id);
+          if (peerConnectionRef.current && track.readyState === 'live') {
+            console.log('[WebRTC] ➕ Adding track:', track.kind, track.id, 'enabled:', track.enabled, 'readyState:', track.readyState);
             peerConnectionRef.current.addTrack(track, localStreamRef.current!);
+            tracksToAdd.push(track.kind);
+          } else {
+            console.warn('[WebRTC] ⚠️ Skipping track:', track.kind, 'readyState:', track.readyState);
           }
         });
+        console.log('[WebRTC] ✅ Added tracks:', tracksToAdd.join(', '));
         
         // Verify tracks were added
         const newSenders = peerConnectionRef.current.getSenders();
-        console.log('[WebRTC] Tracks added. New senders count:', newSenders.length);
+        console.log('[WebRTC] ✅ Verification: New senders count:', newSenders.length);
+        newSenders.forEach(sender => {
+          if (sender.track) {
+            console.log('[WebRTC] ✅ Sender:', sender.track.kind, 'enabled:', sender.track.enabled, 'readyState:', sender.track.readyState);
+          }
+        });
+        
         if (newSenders.length === 0) {
-          console.error('[WebRTC] Failed to add tracks! Cannot create offer.');
+          console.error('[WebRTC] ❌ CRITICAL: Failed to add tracks! Cannot create offer.');
           return;
         }
       } else {
@@ -670,18 +681,21 @@ export function useWebRTC({
       }
 
       // CRITICAL: Ensure we have tracks BEFORE setting remote description and creating answer
+      // The answerer MUST have tracks to send video/audio to the offerer
       const senders = peerConnectionRef.current.getSenders();
-      console.log('[WebRTC] Current senders count before handling offer:', senders.length);
+      console.log('[WebRTC] 🔍 Checking senders before handling offer. Count:', senders.length);
       
       if (senders.length === 0) {
-        // No tracks added yet - we MUST add them
+        console.log('[WebRTC] ⚠️ No tracks found! Getting media and adding tracks NOW...');
+        
         if (!localStreamRef.current) {
-          console.log('[WebRTC] No local stream, getting media before handling offer');
+          console.log('[WebRTC] 📹 No local stream, getting media before handling offer');
           try {
             const stream = await navigator.mediaDevices.getUserMedia({
               video: isVideoEnabled,
               audio: isAudioEnabled
             });
+            console.log('[WebRTC] ✅ Got media stream. Tracks:', stream.getTracks().map(t => `${t.kind} (${t.id})`));
             localStreamRef.current = stream;
             
             // Add to local video element
@@ -692,23 +706,52 @@ export function useWebRTC({
               });
             }
           } catch (mediaError) {
-            console.error('[WebRTC] Failed to get media:', mediaError);
+            console.error('[WebRTC] ❌ Failed to get media:', mediaError);
             return;
           }
         }
         
         // Add all tracks to peer connection
-        console.log('[WebRTC] Adding tracks to peer connection before handling offer');
+        console.log('[WebRTC] ➕ Adding tracks to peer connection before handling offer (ANSWERER)');
+        const tracksToAdd: string[] = [];
         localStreamRef.current.getTracks().forEach(track => {
-          if (peerConnectionRef.current) {
-            console.log('[WebRTC] Adding track:', track.kind, track.id);
+          if (peerConnectionRef.current && track.readyState === 'live') {
+            console.log('[WebRTC] ➕ Adding track:', track.kind, track.id, 'enabled:', track.enabled, 'readyState:', track.readyState);
             peerConnectionRef.current.addTrack(track, localStreamRef.current!);
+            tracksToAdd.push(track.kind);
+          } else {
+            console.warn('[WebRTC] ⚠️ Skipping track:', track.kind, 'readyState:', track.readyState);
           }
         });
+        console.log('[WebRTC] ✅ Added tracks:', tracksToAdd.join(', '));
         
         // Verify tracks were added
         const newSenders = peerConnectionRef.current.getSenders();
-        console.log('[WebRTC] Tracks added. New senders count:', newSenders.length);
+        console.log('[WebRTC] ✅ Verification: New senders count:', newSenders.length);
+        newSenders.forEach(sender => {
+          if (sender.track) {
+            console.log('[WebRTC] ✅ Sender:', sender.track.kind, 'enabled:', sender.track.enabled, 'readyState:', sender.track.readyState);
+          }
+        });
+        
+        if (newSenders.length === 0) {
+          console.error('[WebRTC] ❌ CRITICAL: Failed to add tracks! Cannot proceed with offer.');
+          return;
+        }
+      } else {
+        // Verify existing tracks are enabled and live
+        console.log('[WebRTC] ✅ Tracks already exist, verifying:');
+        let allTracksGood = true;
+        senders.forEach(sender => {
+          if (sender.track) {
+            const isGood = sender.track.enabled && sender.track.readyState === 'live';
+            console.log('[WebRTC] Sender:', sender.track.kind, 'enabled:', sender.track.enabled, 'readyState:', sender.track.readyState, isGood ? '✅' : '⚠️');
+            if (!isGood) allTracksGood = false;
+          }
+        });
+        if (!allTracksGood) {
+          console.warn('[WebRTC] ⚠️ Some tracks are not ready, but proceeding anyway');
+        }
       }
 
       // Step 1: Set remote description (ontrack is already registered above)
