@@ -120,31 +120,132 @@ export const useWebRTC = ({
         return;
       }
     
-      // Use the stream from the event directly (standard WebRTC approach)
-      // If event.streams[0] exists, use it; otherwise create a new stream with the track
+      // Build a complete stream with all tracks (audio + video)
+      // Use the stream from the event if available, otherwise build our own
       let streamToUse: MediaStream;
       
       if (event.streams && event.streams.length > 0) {
+        // Use the stream from the event (this is the standard approach)
         streamToUse = event.streams[0];
         console.log("[WebRTC] Using stream from event.streams[0]");
       } else {
-        // Fallback: create stream from track
+        // Fallback: build stream from tracks
         if (!remoteStreamRef.current) {
           remoteStreamRef.current = new MediaStream();
+          console.log("[WebRTC] Created new remote stream");
         }
+        // Add the track to our stream (both audio and video)
         remoteStreamRef.current.addTrack(event.track);
+        console.log("[WebRTC] Added", event.track.kind, "track to remote stream");
         streamToUse = remoteStreamRef.current;
-        console.log("[WebRTC] Created/updated remote stream with track");
       }
       
-      console.log("[WebRTC] Stream tracks:", streamToUse.getTracks().map(t => `${t.kind} (${t.id}, ${t.readyState})`));
+      const videoTracks = streamToUse.getVideoTracks();
+      console.log("[WebRTC] Stream video tracks:", videoTracks.length);
+      console.log("[WebRTC] Stream all tracks:", streamToUse.getTracks().map(t => `${t.kind} (${t.id}, ${t.readyState}, enabled: ${t.enabled})`));
       
-      // Always set srcObject to ensure it's updated
-      console.log("[WebRTC] Setting remote video srcObject");
-      remoteVideo.srcObject = streamToUse;
-      remoteVideo.playsInline = true;
-      remoteVideo.autoplay = true;
-      remoteVideo.muted = false; // Remote video should not be muted
+      // Verify we have video tracks
+      if (videoTracks.length === 0) {
+        console.error("[WebRTC] ❌ No video tracks in stream! Cannot display video.");
+        return;
+      }
+      
+      // Check if video track is live
+      const videoTrack = videoTracks[0];
+      console.log("[WebRTC] Video track details:", {
+        id: videoTrack.id,
+        readyState: videoTrack.readyState,
+        enabled: videoTrack.enabled,
+        label: videoTrack.label,
+        muted: videoTrack.muted
+      });
+      
+      // Try to get track settings (might fail in some browsers)
+      try {
+        const settings = videoTrack.getSettings();
+        console.log("[WebRTC] Video track settings:", settings);
+      } catch (e) {
+        console.log("[WebRTC] Could not get video track settings:", e);
+      }
+      
+      if (videoTrack.readyState !== 'live') {
+        console.warn("[WebRTC] ⚠️ Video track is not live yet, readyState:", videoTrack.readyState);
+        // Wait for track to become live
+        const checkLive = setInterval(() => {
+          if (videoTrack.readyState === 'live' && remoteVideoRef.current) {
+            console.log("[WebRTC] ✅ Video track is now live!");
+            clearInterval(checkLive);
+            // Set srcObject now that track is live
+            remoteVideoRef.current.srcObject = streamToUse;
+            remoteVideoRef.current.playsInline = true;
+            remoteVideoRef.current.autoplay = true;
+            remoteVideoRef.current.muted = false;
+            remoteVideoRef.current.play().catch(err => {
+              console.error("[WebRTC] Error playing after track became live:", err);
+            });
+          }
+        }, 100);
+        // Stop checking after 5 seconds
+        setTimeout(() => clearInterval(checkLive), 5000);
+        return; // Don't set srcObject yet
+      }
+      
+      if (!videoTrack.enabled) {
+        console.warn("[WebRTC] ⚠️ Video track is disabled! Enabling it...");
+        videoTrack.enabled = true;
+      }
+      
+      // Only set srcObject if it's different or if current srcObject has no video tracks
+      const currentStream = remoteVideo.srcObject as MediaStream | null;
+      const needsUpdate = !currentStream || 
+                          currentStream.getVideoTracks().length === 0 || 
+                          currentStream.getVideoTracks()[0].id !== videoTrack.id;
+      
+      if (needsUpdate) {
+        console.log("[WebRTC] Setting remote video srcObject");
+        
+        // Clear any existing srcObject first
+        if (remoteVideo.srcObject) {
+          console.log("[WebRTC] Clearing existing srcObject");
+          remoteVideo.srcObject = null;
+        }
+        
+        // Small delay to ensure cleanup
+        setTimeout(() => {
+          if (!remoteVideoRef.current) return;
+          
+          remoteVideoRef.current.srcObject = streamToUse;
+          remoteVideoRef.current.playsInline = true;
+          remoteVideoRef.current.autoplay = true;
+          remoteVideoRef.current.muted = false; // Remote video should not be muted
+          
+          console.log("[WebRTC] ✅ Remote video srcObject set");
+          console.log("[WebRTC] Video element readyState:", remoteVideoRef.current.readyState);
+          console.log("[WebRTC] Video element srcObject tracks:", (remoteVideoRef.current.srcObject as MediaStream)?.getTracks().length);
+          
+          // Force play
+          remoteVideoRef.current.play()
+            .then(() => {
+              console.log("[WebRTC] ✅ Video play() succeeded");
+              // Check dimensions after a short delay
+              setTimeout(() => {
+                if (remoteVideoRef.current) {
+                  const width = remoteVideoRef.current.videoWidth;
+                  const height = remoteVideoRef.current.videoHeight;
+                  console.log("[WebRTC] Video dimensions after play:", width, "x", height);
+                  if (width === 0 || height === 0) {
+                    console.error("[WebRTC] ❌ Video dimensions still 0x0 after play - decoder issue!");
+                  }
+                }
+              }, 500);
+            })
+            .catch(err => {
+              console.error("[WebRTC] ❌ Video play() failed:", err);
+            });
+        }, 50);
+      } else {
+        console.log("[WebRTC] srcObject already set with correct stream, skipping update");
+      }
       
       // Force video element to have dimensions
       if (remoteVideo.style.width === '' || remoteVideo.style.height === '') {
