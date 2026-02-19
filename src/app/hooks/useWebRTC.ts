@@ -107,27 +107,101 @@ export const useWebRTC = ({
 
     // Receive remote stream
     pc.ontrack = (event) => {
-      console.log("[WebRTC] 📹 ontrack event:", event.track.kind);
+      console.log("[WebRTC] 📹 ontrack event received!");
+      console.log("[WebRTC] Track kind:", event.track.kind);
+      console.log("[WebRTC] Track id:", event.track.id);
+      console.log("[WebRTC] Track readyState:", event.track.readyState);
+      console.log("[WebRTC] Track enabled:", event.track.enabled);
+      console.log("[WebRTC] Streams count:", event.streams.length);
     
       if (!remoteStreamRef.current) {
         remoteStreamRef.current = new MediaStream();
+        console.log("[WebRTC] Created new remote stream");
       }
     
       remoteStreamRef.current.addTrack(event.track);
+      console.log("[WebRTC] Added track to remote stream. Total tracks:", remoteStreamRef.current.getTracks().length);
     
       const remoteVideo = remoteVideoRef.current;
-      if (!remoteVideo) return;
+      if (!remoteVideo) {
+        console.warn("[WebRTC] ⚠️ remoteVideoRef.current is null - cannot set remote stream");
+        return;
+      }
     
       if (remoteVideo.srcObject !== remoteStreamRef.current) {
-        console.log("[WebRTC] Setting remote video srcObject ONCE");
+        console.log("[WebRTC] Setting remote video srcObject");
         remoteVideo.srcObject = remoteStreamRef.current;
+        remoteVideo.playsInline = true;
+        remoteVideo.autoplay = true;
+        remoteVideo.muted = false; // Remote video should not be muted
+        console.log("[WebRTC] ✅ Remote video element configured");
       }
     
+      // Check video dimensions after setting srcObject
+      const checkDimensions = () => {
+        if (remoteVideo) {
+          const width = remoteVideo.videoWidth;
+          const height = remoteVideo.videoHeight;
+          const readyState = remoteVideo.readyState;
+          
+          console.log("[WebRTC] Remote video dimensions:", width, "x", height);
+          console.log("[WebRTC] Remote video readyState:", readyState);
+          console.log("[WebRTC] Remote video paused:", remoteVideo.paused);
+          console.log("[WebRTC] Remote video currentTime:", remoteVideo.currentTime);
+          console.log("[WebRTC] Remote video srcObject:", !!remoteVideo.srcObject);
+          
+          if (width === 0 && height === 0) {
+            console.warn("[WebRTC] ⚠️ Video dimensions are 0x0 - video may not be rendering!");
+            console.warn("[WebRTC] This could be a CSS issue (check width/height) or video not loaded yet");
+          } else {
+            console.log("[WebRTC] ✅ Video has dimensions - should be visible!");
+          }
+        }
+      };
+      
+      // Check dimensions after metadata loads
+      remoteVideo.onloadedmetadata = () => {
+        console.log("[WebRTC] Remote video metadata loaded");
+        checkDimensions();
+      };
+    
       if (remoteVideo.paused) {
-        remoteVideo.play().catch(err => {
-          console.log("[WebRTC] play() warning:", err.message);
-        });
+        remoteVideo.play()
+          .then(() => {
+            console.log("[WebRTC] ✅ Remote video started playing");
+            // Check dimensions after play
+            setTimeout(checkDimensions, 100);
+          })
+          .catch(err => {
+            console.error("[WebRTC] ❌ Error playing remote video:", err);
+            console.error("[WebRTC] Error details:", err.name, err.message);
+          });
+      } else {
+        console.log("[WebRTC] Remote video already playing");
+        checkDimensions();
       }
+      
+      // Periodic dimension check to catch rendering issues
+      const dimensionCheckInterval = setInterval(() => {
+        if (remoteVideo) {
+          const width = remoteVideo.videoWidth;
+          const height = remoteVideo.videoHeight;
+          if (width > 0 && height > 0) {
+            console.log("[WebRTC] ✅ Remote video rendering:", width, "x", height);
+            clearInterval(dimensionCheckInterval);
+          } else {
+            console.log("[WebRTC] Still waiting for video dimensions...");
+          }
+        }
+      }, 500);
+      
+      // Stop checking after 10 seconds
+      setTimeout(() => {
+        clearInterval(dimensionCheckInterval);
+        if (remoteVideo && remoteVideo.videoWidth === 0 && remoteVideo.videoHeight === 0) {
+          console.error("[WebRTC] ❌ Video dimensions still 0x0 after 10 seconds - likely CSS or rendering issue!");
+        }
+      }, 10000);
     };
     
 
