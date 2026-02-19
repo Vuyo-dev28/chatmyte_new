@@ -55,13 +55,13 @@ export function ChatInterface() {
   const { socket, isConnected } = useSocket();
   
   // WebRTC - Initialize remote video ref
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   
   // WebRTC
   const { createOffer, handleOffer, handleAnswer, handleIceCandidate } = useWebRTC({
     socket,
     localVideoRef: videoRef,
-    remoteVideoRef,
+    remoteVideoRef: remoteVideoRef as React.RefObject<HTMLVideoElement>,
     isVideoEnabled,
     isAudioEnabled,
     partnerId: partnerId
@@ -177,7 +177,7 @@ export function ChatInterface() {
       // This prevents both users from creating offers simultaneously
       const mySocketId = socket.id;
       const partnerSocketId = data.partnerId;
-      const shouldCreateOffer = mySocketId < partnerSocketId;
+      const shouldCreateOffer = mySocketId && partnerSocketId && mySocketId < partnerSocketId;
       
       console.log('Socket IDs:', { mine: mySocketId, partner: partnerSocketId, shouldCreateOffer });
       
@@ -674,13 +674,28 @@ export function ChatInterface() {
                               autoPlay
                               playsInline
                               muted={false}
-                              className="absolute inset-0 w-full h-full object-cover z-0"
-                              style={{ width: '100%', height: '100%', backgroundColor: '#000' }}
+                              className="absolute inset-0 w-full h-full object-cover"
+                              style={{ 
+                                width: '100%', 
+                                height: '100%', 
+                                backgroundColor: '#000',
+                                minWidth: '100%',
+                                minHeight: '100%',
+                                display: 'block',
+                                zIndex: 0
+                              }}
                               onLoadedMetadata={(e) => {
                                 const video = e.currentTarget;
+                                const rect = video.getBoundingClientRect();
                                 console.log('[ChatInterface] Remote video metadata loaded');
                                 console.log('[ChatInterface] Remote video dimensions:', video.videoWidth, 'x', video.videoHeight);
                                 console.log('[ChatInterface] Remote video readyState:', video.readyState);
+                                console.log('[ChatInterface] Remote video element rect:', { width: rect.width, height: rect.height });
+                                console.log('[ChatInterface] Remote video computed style:', {
+                                  width: window.getComputedStyle(video).width,
+                                  height: window.getComputedStyle(video).height,
+                                  display: window.getComputedStyle(video).display
+                                });
                                 setHasRemoteVideo(true);
                                 video.play().catch(err => {
                                   console.error('Error playing remote video on load:', err);
@@ -689,9 +704,11 @@ export function ChatInterface() {
                               onPlay={() => {
                                 const video = remoteVideoRef.current;
                                 if (video) {
+                                  const rect = video.getBoundingClientRect();
                                   console.log('[ChatInterface] Remote video started playing');
                                   console.log('[ChatInterface] Remote video dimensions:', video.videoWidth, 'x', video.videoHeight);
                                   console.log('[ChatInterface] Remote video currentTime:', video.currentTime);
+                                  console.log('[ChatInterface] Remote video element rect:', { width: rect.width, height: rect.height });
                                 }
                                 setHasRemoteVideo(true);
                               }}
@@ -868,13 +885,28 @@ export function ChatInterface() {
                               autoPlay
                               playsInline
                               muted={false}
-                              className="absolute inset-0 w-full h-full object-cover z-0"
-                              style={{ width: '100%', height: '100%', backgroundColor: '#000' }}
+                              className="absolute inset-0 w-full h-full object-cover"
+                              style={{ 
+                                width: '100%', 
+                                height: '100%', 
+                                backgroundColor: '#000',
+                                minWidth: '100%',
+                                minHeight: '100%',
+                                display: 'block',
+                                zIndex: 0
+                              }}
                               onLoadedMetadata={(e) => {
                                 const video = e.currentTarget;
+                                const rect = video.getBoundingClientRect();
                                 console.log('[ChatInterface] Remote video metadata loaded (desktop)');
                                 console.log('[ChatInterface] Remote video dimensions:', video.videoWidth, 'x', video.videoHeight);
                                 console.log('[ChatInterface] Remote video readyState:', video.readyState);
+                                console.log('[ChatInterface] Remote video element rect:', { width: rect.width, height: rect.height });
+                                console.log('[ChatInterface] Remote video computed style:', {
+                                  width: window.getComputedStyle(video).width,
+                                  height: window.getComputedStyle(video).height,
+                                  display: window.getComputedStyle(video).display
+                                });
                                 setHasRemoteVideo(true);
                                 video.play().catch(err => {
                                   console.error('Error playing remote video on load:', err);
@@ -883,9 +915,11 @@ export function ChatInterface() {
                               onPlay={() => {
                                 const video = remoteVideoRef.current;
                                 if (video) {
+                                  const rect = video.getBoundingClientRect();
                                   console.log('[ChatInterface] Remote video started playing (desktop)');
                                   console.log('[ChatInterface] Remote video dimensions:', video.videoWidth, 'x', video.videoHeight);
                                   console.log('[ChatInterface] Remote video currentTime:', video.currentTime);
+                                  console.log('[ChatInterface] Remote video element rect:', { width: rect.width, height: rect.height });
                                 }
                                 setHasRemoteVideo(true);
                               }}
