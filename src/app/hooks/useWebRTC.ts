@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 
+
+
 interface UseWebRTCProps {
   socket: any;
   localVideoRef: React.RefObject<HTMLVideoElement>;
@@ -20,6 +22,7 @@ export const useWebRTC = ({
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
 
   const iceServers = {
     iceServers: [
@@ -104,28 +107,29 @@ export const useWebRTC = ({
 
     // Receive remote stream
     pc.ontrack = (event) => {
-      console.log("[WebRTC] 📹 ontrack event received!");
-      console.log("[WebRTC] Track kind:", event.track.kind);
-      console.log("[WebRTC] Track id:", event.track.id);
-      console.log("[WebRTC] Streams count:", event.streams.length);
-      
-      if (remoteVideoRef.current) {
-        const stream = event.streams[0] || new MediaStream([event.track]);
-        console.log("[WebRTC] Setting remote video srcObject");
-        remoteVideoRef.current.srcObject = stream;
-        remoteVideoRef.current.playsInline = true;
-        
-        remoteVideoRef.current.play()
-          .then(() => {
-            console.log("[WebRTC] ✅ Remote video started playing");
-          })
-          .catch((err) => {
-            console.error("[WebRTC] ❌ Error playing remote video:", err);
-          });
-      } else {
-        console.warn("[WebRTC] ⚠️ remoteVideoRef.current is null - cannot set remote stream");
+      console.log("[WebRTC] 📹 ontrack event:", event.track.kind);
+    
+      if (!remoteStreamRef.current) {
+        remoteStreamRef.current = new MediaStream();
+      }
+    
+      remoteStreamRef.current.addTrack(event.track);
+    
+      const remoteVideo = remoteVideoRef.current;
+      if (!remoteVideo) return;
+    
+      if (remoteVideo.srcObject !== remoteStreamRef.current) {
+        console.log("[WebRTC] Setting remote video srcObject ONCE");
+        remoteVideo.srcObject = remoteStreamRef.current;
+      }
+    
+      if (remoteVideo.paused) {
+        remoteVideo.play().catch(err => {
+          console.log("[WebRTC] play() warning:", err.message);
+        });
       }
     };
+    
 
     // Add local tracks
     const stream = await initializeMedia();
@@ -224,13 +228,23 @@ export const useWebRTC = ({
         peerConnectionRef.current.close();
         peerConnectionRef.current = null;
       }
-
+  
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
         localStreamRef.current = null;
       }
+  
+      if (remoteStreamRef.current) {
+        remoteStreamRef.current.getTracks().forEach(track => track.stop());
+        remoteStreamRef.current = null;
+      }
+  
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = null;
+      }
     };
   }, [partnerId]);
+  
 
   return {
     createOffer,
