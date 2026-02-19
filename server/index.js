@@ -164,8 +164,11 @@ io.on('connection', (socket) => {
 
   // WebRTC signaling
   socket.on('offer', (data) => {
-    const { offer, targetId } = data;
+    const { offer, to } = data;
     const user = activeConnections.get(socket.id);
+    
+    // Support both 'to' and 'targetId' for backward compatibility
+    const targetId = to || data.targetId;
     
     if (user && user.partnerId === targetId) {
       io.to(targetId).emit('offer', {
@@ -176,25 +179,29 @@ io.on('connection', (socket) => {
   });
 
   socket.on('answer', (data) => {
-    const { answer, targetId } = data;
+    const { answer, to } = data;
     const user = activeConnections.get(socket.id);
+    
+    // Support both 'to' and 'targetId' for backward compatibility
+    const targetId = to || data.targetId;
     
     if (user && user.partnerId === targetId) {
       io.to(targetId).emit('answer', {
-        answer,
-        fromId: socket.id
+        answer
       });
     }
   });
 
   socket.on('ice-candidate', (data) => {
-    const { candidate, targetId } = data;
+    const { candidate, to } = data;
     const user = activeConnections.get(socket.id);
+    
+    // Support both 'to' and 'targetId' for backward compatibility
+    const targetId = to || data.targetId;
     
     if (user && user.partnerId === targetId) {
       io.to(targetId).emit('ice-candidate', {
-        candidate,
-        fromId: socket.id
+        candidate
       });
     }
   });
