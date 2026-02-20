@@ -696,7 +696,12 @@ export function ChatInterface() {
                                   height: window.getComputedStyle(video).height,
                                   display: window.getComputedStyle(video).display
                                 });
-                                setHasRemoteVideo(true);
+                                // Only set hasRemoteVideo to true if video has actual dimensions
+                                if (video.videoWidth > 0 && video.videoHeight > 0) {
+                                  setHasRemoteVideo(true);
+                                } else {
+                                  setHasRemoteVideo(false);
+                                }
                                 video.play().catch(err => {
                                   console.error('Error playing remote video on load:', err);
                                 });
@@ -709,8 +714,13 @@ export function ChatInterface() {
                                   console.log('[ChatInterface] Remote video dimensions:', video.videoWidth, 'x', video.videoHeight);
                                   console.log('[ChatInterface] Remote video currentTime:', video.currentTime);
                                   console.log('[ChatInterface] Remote video element rect:', { width: rect.width, height: rect.height });
+                                  // Only set hasRemoteVideo to true if video has actual dimensions
+                                  if (video.videoWidth > 0 && video.videoHeight > 0) {
+                                    setHasRemoteVideo(true);
+                                  } else {
+                                    setHasRemoteVideo(false);
+                                  }
                                 }
-                                setHasRemoteVideo(true);
                               }}
                               onPause={() => {
                                 console.log('[ChatInterface] Remote video paused');
@@ -724,6 +734,9 @@ export function ChatInterface() {
                                 const video = remoteVideoRef.current;
                                 if (video && video.videoWidth > 0 && video.videoHeight > 0) {
                                   setHasRemoteVideo(true);
+                                } else {
+                                  // If dimensions are still 0, keep showing fallback
+                                  setHasRemoteVideo(false);
                                 }
                               }}
                             />
@@ -907,7 +920,12 @@ export function ChatInterface() {
                                   height: window.getComputedStyle(video).height,
                                   display: window.getComputedStyle(video).display
                                 });
-                                setHasRemoteVideo(true);
+                                // Only set hasRemoteVideo to true if video has actual dimensions
+                                if (video.videoWidth > 0 && video.videoHeight > 0) {
+                                  setHasRemoteVideo(true);
+                                } else {
+                                  setHasRemoteVideo(false);
+                                }
                                 video.play().catch(err => {
                                   console.error('Error playing remote video on load:', err);
                                 });
@@ -920,8 +938,13 @@ export function ChatInterface() {
                                   console.log('[ChatInterface] Remote video dimensions:', video.videoWidth, 'x', video.videoHeight);
                                   console.log('[ChatInterface] Remote video currentTime:', video.currentTime);
                                   console.log('[ChatInterface] Remote video element rect:', { width: rect.width, height: rect.height });
+                                  // Only set hasRemoteVideo to true if video has actual dimensions
+                                  if (video.videoWidth > 0 && video.videoHeight > 0) {
+                                    setHasRemoteVideo(true);
+                                  } else {
+                                    setHasRemoteVideo(false);
+                                  }
                                 }
-                                setHasRemoteVideo(true);
                               }}
                               onPause={() => {
                                 console.log('[ChatInterface] Remote video paused (desktop)');
@@ -935,6 +958,9 @@ export function ChatInterface() {
                                 const video = remoteVideoRef.current;
                                 if (video && video.videoWidth > 0 && video.videoHeight > 0) {
                                   setHasRemoteVideo(true);
+                                } else {
+                                  // If dimensions are still 0, keep showing fallback
+                                  setHasRemoteVideo(false);
                                 }
                               }}
                             />
