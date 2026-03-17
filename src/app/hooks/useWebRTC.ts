@@ -121,17 +121,14 @@ export const useWebRTC = ({
 
       const remoteStream = event.streams[0];
       if (remoteVideoRef.current) {
-        // Prevent redundant srcObject assignments which can trigger AbortError
-        if (remoteVideoRef.current.srcObject !== remoteStream) {
-          remoteVideoRef.current.srcObject = remoteStream;
-
-          // Use a flag or check if already playing to avoid overlapping play() calls
-          remoteVideoRef.current.play().catch((err) => {
-            if (err.name !== 'AbortError') {
-              console.warn("[WebRTC] Error playing remote video:", err);
-            }
-          });
-        }
+        // Force reset the video element to a clean state
+        remoteVideoRef.current.srcObject = remoteStream;
+        
+        remoteVideoRef.current.play().catch((err: any) => {
+          if (err.name !== 'AbortError') {
+            console.warn("[WebRTC] Error playing remote video:", err);
+          }
+        });
       }
     };
 
@@ -369,31 +366,25 @@ export const useWebRTC = ({
         } catch (e) {}
       });
 
-      // 3. Clear remote video and explicit track stopping to avoid "ghosting"
+      // 3. Clear remote video tracks to avoid "ghosting"
       if (remoteVideoRef.current && remoteVideoRef.current.srcObject) {
         try {
           const stream = remoteVideoRef.current.srcObject as MediaStream;
           stream.getTracks().forEach(t => t.stop());
-        } catch (e) {
-          console.warn("[WebRTC] Error stopping remote tracks:", e);
-        }
-        remoteVideoRef.current.srcObject = null;
-        remoteVideoRef.current.src = ""; // Force clear src
-        try {
-          remoteVideoRef.current.load(); // Force browser reset
         } catch (e) {}
+        remoteVideoRef.current.srcObject = null;
       }
 
-      // 3. Final close
+      // 4. Final close
       pc.close();
       peerConnectionRef.current = null;
     }
 
-    // 4. Reset internal signaling flags
+    // 5. Reset internal signaling flags
     makingOfferRef.current = false;
     ignoreOfferRef.current = false;
     iceCandidateQueueRef.current = [];
-    partnerIdRef.current = null; // Strictly prevent leakage to old partner
+    // 🛡️ DO NOT null out partnerIdRef here, as it may be used by a followed initialization
   }, [remoteVideoRef]);
 
   const stopMedia = useCallback(() => {
