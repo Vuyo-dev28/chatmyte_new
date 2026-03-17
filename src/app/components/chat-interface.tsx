@@ -121,12 +121,12 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
       await handleOffer(offer, fromId);
     });
 
-    socket.on("answer", async ({ answer }) => {
-      await handleAnswer(answer);
+    socket.on("answer", async ({ answer, fromId }) => {
+      await handleAnswer(answer, fromId);
     });
 
-    socket.on("ice-candidate", async ({ candidate }) => {
-      await handleIceCandidate(candidate);
+    socket.on("ice-candidate", async ({ candidate, fromId }) => {
+      await handleIceCandidate(candidate, fromId);
     });
 
     socket.on("partner-disconnected", () => {
