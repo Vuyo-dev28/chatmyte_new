@@ -96,7 +96,14 @@ export const useWebRTC = ({
     };
 
     pc.onconnectionstatechange = () => {
-      console.log("Connection state:", pc.connectionState);
+      console.log(`[Signaling] Connection state: ${pc.connectionState}`);
+      if (pc.connectionState === "failed") {
+        console.warn("[Signaling] Connection failed, attempting cleanup...");
+      }
+    };
+
+    pc.onsignalingstatechange = () => {
+      console.log(`[Signaling] Signaling state: ${pc.signalingState}`);
     };
 
     // Remote Track
@@ -186,11 +193,15 @@ export const useWebRTC = ({
         makingOfferRef.current || pc.signalingState !== "stable";
 
       const isPolite = !socket.id || (socket.id > from);
-      ignoreOfferRef.current = isPolite && offerCollision;
+      ignoreOfferRef.current = !isPolite && offerCollision;
 
       if (ignoreOfferRef.current) {
-        console.warn("⚠️ [Signaling] Ignoring offer due to collision (polite peer logic)");
+        console.warn("⚠️ [Signaling] Ignoring offer due to collision (IMPOLITE peer logic)");
         return;
+      }
+
+      if (isPolite && offerCollision) {
+         console.warn("⚠️ [Signaling] Processing conflicting offer (POLITE peer logic)");
       }
 
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
