@@ -62,8 +62,8 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
       }
     });
 
-    socket.on("offer", async ({ offer, from }) => {
-      await handleOffer(offer, from);
+    socket.on("offer", async ({ offer, fromId }) => {
+      await handleOffer(offer, fromId);
     });
 
     socket.on("answer", async ({ answer }) => {

@@ -27,6 +27,7 @@ export const useWebRTC = ({
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
 
   // ===============================
   // 1️⃣ Initialize Media (ONLY ONCE)
@@ -154,6 +155,15 @@ export const useWebRTC = ({
 
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
+    // Process queued ICE candidates
+    if (iceCandidateQueueRef.current.length > 0) {
+      console.log(`📥 Processing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
+      iceCandidateQueueRef.current.forEach(candidate => {
+        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("❌ ICE error:", e));
+      });
+      iceCandidateQueueRef.current = [];
+    }
+
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
@@ -175,6 +185,15 @@ export const useWebRTC = ({
 
     await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
+    // Process queued ICE candidates
+    if (iceCandidateQueueRef.current.length > 0) {
+      console.log(`📥 Processing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
+      iceCandidateQueueRef.current.forEach(candidate => {
+        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("❌ ICE error:", e));
+      });
+      iceCandidateQueueRef.current = [];
+    }
+
   }, []);
 
   // ===============================
@@ -185,7 +204,12 @@ export const useWebRTC = ({
     if (!pc) return;
 
     try {
-      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      if (pc.remoteDescription) {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } else {
+        console.log("⏳ Queueing ICE candidate (remote description not set)");
+        iceCandidateQueueRef.current.push(candidate);
+      }
     } catch (error) {
       console.error("❌ ICE error:", error);
     }
@@ -218,6 +242,7 @@ export const useWebRTC = ({
 
     localStreamRef.current?.getTracks().forEach(track => track.stop());
     localStreamRef.current = null;
+    iceCandidateQueueRef.current = [];
   }, []);
 
   useEffect(() => {
