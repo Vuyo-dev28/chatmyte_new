@@ -7,11 +7,13 @@ import { initializePayPal } from '../lib/subscriptions';
 import { PAYPAL_CONFIG } from '../lib/paypal-config';
 import { paypalService } from '../lib/paypal';
 import { supabase } from '../lib/supabase';
+import { useSocket } from './hooks/useSocket';
 
 function AppContent() {
   const { user, loading, refreshUser } = useAuth();
   const [showSignup, setShowSignup] = useState(false);
   const [processingSubscription, setProcessingSubscription] = useState(false);
+  const { socket, isConnected } = useSocket();
   // Use singleton instance
 
   // Handle PayPal subscription callback
@@ -355,7 +357,20 @@ function AppContent() {
     );
   }
 
-  return <ChatInterface />;
+  if (!socket || !isConnected) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <p className="text-yellow-400">Connecting to server...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <ChatInterface socket={socket} />;
 }
 
 export default function App() {

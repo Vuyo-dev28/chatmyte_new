@@ -95,8 +95,17 @@ export const useWebRTC = ({
 
       const remoteStream = event.streams[0];
       if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStream;
-        remoteVideoRef.current.play().catch(() => {});
+        // Prevent redundant srcObject assignments which can trigger AbortError
+        if (remoteVideoRef.current.srcObject !== remoteStream) {
+          remoteVideoRef.current.srcObject = remoteStream;
+          
+          // Use a flag or check if already playing to avoid overlapping play() calls
+          remoteVideoRef.current.play().catch((err) => {
+            if (err.name !== 'AbortError') {
+              console.warn("[WebRTC] Error playing remote video:", err);
+            }
+          });
+        }
       }
     };
 

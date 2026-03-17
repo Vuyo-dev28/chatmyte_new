@@ -6,7 +6,7 @@ interface ChatInterfaceProps {
   socket: Socket;
 }
 
-export default function ChatInterface({ socket }: ChatInterfaceProps) {
+export function ChatInterface({ socket }: ChatInterfaceProps) {
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
@@ -36,6 +36,7 @@ export default function ChatInterface({ socket }: ChatInterfaceProps) {
   // 🎯 Match Handling
   // ===============================
   useEffect(() => {
+    if (!socket) return;
     socket.emit("start-search");
 
     socket.on("match-found", async (data: { partnerId: string }) => {
