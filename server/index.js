@@ -51,15 +51,24 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@chatmyte.com";
 
 // Geolocation helper
 async function getGeoLocation(ip) {
-  // Simple check for localhost
-  if (ip === '::1' || ip === '127.0.0.1') return { country: 'Localhost' };
+  console.log('[Geo] Detecting origin for IP:', ip);
+  
+  // Local/Private IP ranges check
+  const isLocal = ip === '::1' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.');
+  if (isLocal) return { country: 'Local Network' };
   
   try {
     const response = await fetch(`http://ip-api.com/json/${ip}`);
     const data = await response.json();
+    
+    if (data.status === 'fail') {
+      console.warn('[Geo] Lookup failed for IP:', ip, 'Reason:', data.message);
+      return { country: 'Unknown' };
+    }
+    
     return { country: data.country || 'Unknown' };
   } catch (err) {
-    console.error('GeoLocation error:', err);
+    console.error('[Geo] API Error:', err.message);
     return { country: 'Unknown' };
   }
 }
@@ -245,6 +254,9 @@ io.on('connection', async (socket) => {
       .eq('id', userData.userId)
       .single();
 
+    socket.userId = userData.userId;
+    socket.is_admin = !!profile?.is_admin;
+
     const user = {
       socketId: socket.id,
       userId: userData.userId,
@@ -253,7 +265,7 @@ io.on('connection', async (socket) => {
       preferredGender: userData.preferredGender || 'all',
       tier: userData.tier || 'free',
       age: userData.age,
-      is_admin: !!profile?.is_admin,
+      is_admin: socket.is_admin,
       country: geo.country,
       connectedAt: new Date().toISOString()
     };
