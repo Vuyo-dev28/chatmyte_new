@@ -12,17 +12,14 @@ interface UseWebRTCProps {
 
 const iceServers = {
   iceServers: [
-    // STUN (keep 1, that's enough)
     { urls: "stun:stun.l.google.com:19302" },
 
-    // TURN (THIS is what fixes your issue)
     {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443",
+      urls: [
+        "turn:openrelay.metered.ca:80?transport=udp",
+        "turn:openrelay.metered.ca:80?transport=tcp",
+        "turn:openrelay.metered.ca:443?transport=tcp"
+      ],
       username: "openrelayproject",
       credential: "openrelayproject"
     }
