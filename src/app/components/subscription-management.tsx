@@ -70,11 +70,16 @@ export function SubscriptionManagement() {
   };
 
   const handleCancelClick = () => {
+    console.log('[Subscription] Cancel button clicked');
     setShowCancelDialog(true);
   };
 
   const handleCancelConfirm = () => {
-    if (!subscription || !socket) return;
+    console.log('[Subscription] handleCancelConfirm triggered', { subscriptionId: subscription?.id, hasSocket: !!socket, userId: user?.id });
+    if (!subscription || !socket) {
+      console.warn('[Subscription] Cannot cancel: subscription or socket missing');
+      return;
+    }
     setShowCancelDialog(false);
     setCancelling(true);
     setError('');
