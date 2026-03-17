@@ -35,9 +35,9 @@ export async function getActiveSubscription(): Promise<Subscription | null> {
       .from('subscriptions')
       .select('*')
       .eq('user_id', user.id)
-      .eq('status', 'active')
+      .in('status', ['active', 'cancelled']) // 🟢 Allow cancelled subscriptions until they expire
       .order('started_at', { ascending: false })
-      .limit(1); // Only get the most recent one - much faster
+      .limit(1);
 
     if (error) {
       if (error.code === 'PGRST116') {
@@ -218,55 +218,18 @@ export async function createPayPalSubscription(
 }
 
 /**
- * Cancel a PayPal subscription by database subscription ID
+ * Cancel a PayPal subscription via the server's socket connection
  */
 export async function cancelPayPalSubscription(
   subscriptionId: string,
   reason?: string
 ): Promise<void> {
-  try {
-    // Get subscription from database to find PayPal subscription ID
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-
-    const { data: subscription, error: fetchError } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('id', subscriptionId)
-      .eq('user_id', user.id)
-      .single();
-
-    if (fetchError || !subscription) {
-      throw new Error('Subscription not found');
-    }
-
-    // Cancel in PayPal if it's a PayPal subscription
-    if (subscription.payment_provider === 'paypal' && subscription.payment_provider_subscription_id) {
-      try {
-        await paypalService.cancelSubscription(subscription.payment_provider_subscription_id, reason);
-      } catch (paypalError: any) {
-        console.warn('PayPal cancellation failed, but continuing with database update:', paypalError);
-        // Continue to update database even if PayPal cancellation fails
-      }
-    }
-
-    // Update subscription status in database
-    const { error: updateError } = await supabase
-      .from('subscriptions')
-      .update({
-        status: 'cancelled',
-        cancelled_at: new Date().toISOString(),
-      })
-      .eq('id', subscriptionId)
-      .eq('user_id', user.id);
-
-    if (updateError) {
-      throw updateError;
-    }
-  } catch (error) {
-    console.error('Error cancelling PayPal subscription:', error);
-    throw error;
-  }
+  // We'll use the socket which is managed in the AuthContext or custom hook
+  // But for this library function, we create a temporary bridge or just instruct the UI
+  // Better: The UI will call this, so let's make it more of a "prepare" or "emit" function
+  // Actually, since this is a lib function, it doesn't have easy access to the live socket
+  // unless we pass it in.
+  throw new Error('Please use the socket-based cancellation in the SubscriptionManagement component');
 }
 
 /**

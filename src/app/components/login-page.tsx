@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Video, Sparkles } from 'lucide-react';
+import { SEO } from './SEO';
 
 interface LoginPageProps {
   onSwitchToSignup: () => void;
@@ -45,7 +46,12 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black p-4 sm:p-6">
+    <>
+      <SEO 
+        title="Login | ChatMyte - #1 Omegle Alternative | Best Random Video Chat 2026"
+        description="Sign in to ChatMyte, the ultimate Omegle alternative. Join thousands of users in safe, anonymous random video chat with gender and country filters."
+      />
+      <div className="min-h-screen flex items-center justify-center bg-black p-4 sm:p-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-6 sm:mb-8">
           <div className="inline-flex items-center justify-center w-24 h-24 mb-4">
@@ -111,5 +117,6 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
         </div>
       </div>
     </div>
+    </>
   );
 }

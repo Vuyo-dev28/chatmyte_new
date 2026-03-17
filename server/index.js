@@ -1,8 +1,12 @@
+import dotenv from 'dotenv';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
+import { paypalService } from './paypal.js';
+
+dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
@@ -18,6 +22,13 @@ const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
   process.env.VITE_SUPABASE_ANON_KEY
 );
+
+// Initialize PayPal
+paypalService.initialize({
+  clientId: process.env.VITE_PAYPAL_CLIENT_ID,
+  clientSecret: process.env.VITE_PAYPAL_CLIENT_SECRET,
+  mode: process.env.VITE_PAYPAL_MODE || 'sandbox'
+});
 
 app.use(cors());
 app.use(express.json());
@@ -192,7 +203,58 @@ io.on('connection', async (socket) => {
     io.to('admin_room').emit('admin:stats-update', stats);
   };
 
-  socket.on('admin:join', async (email) => {
+    socket.on('subscription:cancel', async ({ subscriptionId, reason }) => {
+      try {
+        console.log(`[Subscription] Cancelling ${subscriptionId} for user ${socket.userId}`);
+        
+        // 1. Get subscription details from Supabase to verify ownership and get PayPal ID
+        const { data: subscription, error: fetchError } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('id', subscriptionId)
+          .eq('user_id', socket.userId || '')
+          .single();
+
+        if (fetchError || !subscription) {
+          console.error('[Subscription] Not found or unauthorized:', fetchError);
+          socket.emit('subscription:cancel-error', { message: 'Subscription not found' });
+          return;
+        }
+
+        // 2. Cancel in PayPal if applicable
+        if (subscription.payment_provider === 'paypal' && subscription.payment_provider_subscription_id) {
+          try {
+            await paypalService.cancelSubscription(subscription.payment_provider_subscription_id, reason);
+          } catch (paypalError) {
+            console.error('[PayPal] Cancellation failed:', paypalError.message);
+            // We continue anyway to update our DB status
+          }
+        }
+
+        // 3. Update Supabase
+        const { error: updateError } = await supabase
+          .from('subscriptions')
+          .update({
+            status: 'cancelled',
+            cancelled_at: new Date().toISOString()
+          })
+          .eq('id', subscriptionId);
+
+        if (updateError) throw updateError;
+
+        socket.emit('subscription:cancel-success', { subscriptionId });
+        console.log(`[Subscription] Successfully cancelled ${subscriptionId}`);
+        
+        // Broadcast stats refresh to admins
+        broadcastStats();
+      } catch (error) {
+        console.error('[Subscription] Cancel error:', error);
+        socket.emit('subscription:cancel-error', { message: error.message });
+      }
+    });
+
+    // --- Admin Events ---
+    socket.on('admin:join', async (email) => {
     // Basic email check first as a fast filter
     if (email === ADMIN_EMAIL) {
       socket.join('admin_room');

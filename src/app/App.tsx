@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './components/auth-context';
 import { LoginPage } from './components/login-page';
 import { SignupPage } from './components/signup-page';
@@ -417,8 +418,10 @@ export default function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <HelmetProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </HelmetProvider>
   );
 }

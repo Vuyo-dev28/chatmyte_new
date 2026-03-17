@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { useAuth } from './auth-context';
 import { getActiveSubscription, cancelPayPalSubscription } from '../../lib/subscriptions';
-import { Crown, X, Loader2, AlertTriangle } from 'lucide-react';
+import { Crown, X, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useSocket } from '../hooks/useSocket';
 import type { Subscription } from '../../lib/subscriptions';
 import {
   AlertDialog,
@@ -18,12 +19,38 @@ import {
 
 export function SubscriptionManagement() {
   const { user, refreshUser } = useAuth();
+  const { socket } = useSocket();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState('');
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelSuccess, setCancelSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on('subscription:cancel-success', async () => {
+      setCancelling(false);
+      setCancelSuccess(true);
+      await loadSubscription();
+      await refreshUser();
+      
+      setTimeout(() => {
+        setCancelSuccess(false);
+      }, 5000);
+    });
+
+    socket.on('subscription:cancel-error', ({ message }: { message: string }) => {
+      setCancelling(false);
+      setError(message || 'Failed to cancel subscription');
+    });
+
+    return () => {
+      socket.off('subscription:cancel-success');
+      socket.off('subscription:cancel-error');
+    };
+  }, [socket]);
 
   useEffect(() => {
     loadSubscription();
@@ -46,31 +73,18 @@ export function SubscriptionManagement() {
     setShowCancelDialog(true);
   };
 
-  const handleCancelConfirm = async () => {
-    if (!subscription) return;
-
+  const handleCancelConfirm = () => {
+    if (!subscription || !socket) return;
     setShowCancelDialog(false);
     setCancelling(true);
     setError('');
-
-    try {
-      await cancelPayPalSubscription(subscription.id, 'User requested cancellation');
-      await loadSubscription(); // Reload to get updated status
-      
-      await refreshUser(); // Update AuthContext via top-level hook
-      
-      setCancelSuccess(true);
-      // Auto-hide success message after 5 seconds
-      setTimeout(() => {
-        setCancelSuccess(false);
-      }, 5000);
-    } catch (err: any) {
-      console.error('Error cancelling subscription:', err);
-      setError(err.message || 'Failed to cancel subscription. Please try again.');
-    } finally {
-      setCancelling(false);
-    }
+    
+    socket.emit('subscription:cancel', { 
+      subscriptionId: subscription.id,
+      reason: 'User requested cancellation'
+    });
   };
+
 
   if (loading) {
     return (

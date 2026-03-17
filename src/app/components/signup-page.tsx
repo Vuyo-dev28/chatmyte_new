@@ -5,6 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Video } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { SEO } from './SEO';
 
 interface SignupPageProps {
   onSwitchToLogin: () => void;
@@ -57,7 +58,12 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black p-4 sm:p-6">
+    <>
+      <SEO 
+        title="Join ChatMyte | Safe Omegle Alternative - Anonymous Random Video Chat"
+        description="Create your free ChatMyte account. Experience the best random video chat with strangers. Secure, moderated, and premium 1-on-1 video calling."
+      />
+      <div className="min-h-screen flex items-center justify-center bg-black p-4 sm:p-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-6 sm:mb-8">
           <div className="inline-flex items-center justify-center w-24 h-24 mb-4">
@@ -165,5 +171,6 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
         </div>
       </div>
     </div>
+    </>
   );
 }
