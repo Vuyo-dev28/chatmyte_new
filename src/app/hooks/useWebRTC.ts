@@ -377,6 +377,8 @@ export const useWebRTC = ({
   }, [cleanup]);
 
   return {
+    createOffer,
+    handleOffer,
     handleAnswer,
     handleIceCandidate,
     cleanup,
