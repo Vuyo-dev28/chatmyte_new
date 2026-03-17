@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useAuth } from './auth-context';
-import { SubscriptionManagement } from './subscription-management';
 import { PremiumModal } from './premium-modal';
 import { ProfileModal } from './profile-modal';
 import { Button } from './ui/button';
@@ -12,7 +11,8 @@ import {
   ShieldCheck,
   MessageSquare,
   Users,
-  ChevronDown
+  ChevronDown,
+  Crown
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -26,10 +26,17 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
   const { user, logout } = useAuth();
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileTab, setProfileTab] = useState<'profile' | 'subscription'>('profile');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isGenderMenuOpen, setIsGenderMenuOpen] = useState(false);
 
   if (!user) return null;
+
+  const openProfile = (tab: 'profile' | 'subscription' = 'profile') => {
+    setProfileTab(tab);
+    setIsProfileModalOpen(true);
+    setIsUserMenuOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-yellow-500/30">
@@ -86,14 +93,19 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
                       
                       <div className="p-2">
                         <button 
-                          onClick={() => {
-                            setIsProfileModalOpen(true);
-                            setIsUserMenuOpen(false);
-                          }}
+                          onClick={() => openProfile('profile')}
                           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
                         >
                           <Settings className="w-4 h-4" />
                           Edit Profile
+                        </button>
+                        
+                        <button 
+                          onClick={() => openProfile('subscription')}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
+                        >
+                          <Crown className="w-4 h-4 text-yellow-500" />
+                          Manage Subscription
                         </button>
                         
                         {user.tier !== 'premium' && (
@@ -166,15 +178,13 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
 
               <Button 
                 variant="outline"
-                onClick={() => setIsProfileModalOpen(true)}
+                onClick={() => openProfile('profile')}
                 className="w-full mt-6 border-yellow-600/20 bg-white/5 text-yellow-200 hover:bg-white/10"
               >
                 <Settings className="w-4 h-4 mr-2" />
                 Edit Profile
               </Button>
             </div>
-
-            <SubscriptionManagement />
           </div>
 
           {/* --- Right Column: Main Action --- */}
@@ -298,6 +308,7 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
       <ProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+        initialTab={profileTab}
       />
     </div>
   );
