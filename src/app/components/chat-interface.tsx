@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Socket } from "socket.io-client";
 import { useWebRTC } from "../hooks/useWebRTC";
+import { useAuth } from "../components/auth-context";
 
 interface ChatInterfaceProps {
   socket: Socket;
+  onExit: () => void;
 }
 
-export function ChatInterface({ socket }: ChatInterfaceProps) {
+export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
+  const { user } = useAuth();
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
@@ -36,14 +39,24 @@ export function ChatInterface({ socket }: ChatInterfaceProps) {
   // 🎯 Match Handling
   // ===============================
   useEffect(() => {
-    if (!socket) return;
-    socket.emit("start-search");
+    if (!socket || !user) return;
+    
+    // Server expects "join-queue" with userData
+    socket.emit("join-queue", {
+      userId: user.id,
+      username: user.username,
+      gender: user.gender,
+      tier: user.tier,
+      preferredGender: 'all' // Default preference
+    });
 
-    socket.on("match-found", async (data: { partnerId: string }) => {
+    // Server emits "matched" when a match is found
+    socket.on("matched", async (data: { partnerId: string }) => {
+      console.log("🎯 Match found:", data.partnerId);
       setPartnerId(data.partnerId);
       setIsSearching(false);
 
-      // deterministic offer creator
+      // deterministic offer creator (lexicographical order)
       if (socket.id && socket.id < data.partnerId) {
         await createOffer(data.partnerId);
       }
@@ -65,14 +78,19 @@ export function ChatInterface({ socket }: ChatInterfaceProps) {
       handleSkip();
     });
 
+    socket.on("partner-skipped", () => {
+      handleSkip();
+    });
+
     return () => {
-      socket.off("match-found");
+      socket.off("matched");
       socket.off("offer");
       socket.off("answer");
       socket.off("ice-candidate");
       socket.off("partner-disconnected");
+      socket.off("partner-skipped");
     };
-  }, [socket, createOffer, handleOffer, handleAnswer, handleIceCandidate]);
+  }, [socket, user, createOffer, handleOffer, handleAnswer, handleIceCandidate]);
 
   // ===============================
   // 🔄 Skip Chat
@@ -82,18 +100,26 @@ export function ChatInterface({ socket }: ChatInterfaceProps) {
     setPartnerId(null);
     setIsSearching(true);
     socket.emit("skip");
-    socket.emit("start-search");
-  }, [cleanup, socket]);
+    // socket.emit("start-search"); // Server "skip" already re-adds partner to queue, but we need to re-join
+    socket.emit("join-queue", {
+      userId: user?.id,
+      username: user?.username,
+      gender: user?.gender,
+      tier: user?.tier,
+      preferredGender: 'all'
+    });
+  }, [cleanup, socket, user]);
 
   // ===============================
   // ❌ Exit Chat
   // ===============================
   const handleExit = useCallback(() => {
     cleanup();
-    socket.emit("leave-chat");
+    socket.emit("leave-queue");
     setPartnerId(null);
     setIsSearching(true);
-  }, [cleanup, socket]);
+    onExit();
+  }, [cleanup, socket, onExit]);
 
   return (
     <div className="relative w-full h-screen bg-black flex items-center justify-center">

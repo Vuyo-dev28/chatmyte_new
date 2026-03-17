@@ -3,8 +3,8 @@ import { Socket } from "socket.io-client";
 
 interface UseWebRTCProps {
   socket: Socket;
-  localVideoRef: React.RefObject<HTMLVideoElement>;
-  remoteVideoRef: React.RefObject<HTMLVideoElement>;
+  localVideoRef: React.RefObject<HTMLVideoElement | null>;
+  remoteVideoRef: React.RefObject<HTMLVideoElement | null>;
   isVideoEnabled: boolean;
   isAudioEnabled: boolean;
   partnerId: string | null;

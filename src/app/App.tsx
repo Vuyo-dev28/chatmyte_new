@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './components/auth-context';
 import { LoginPage } from './components/login-page';
 import { SignupPage } from './components/signup-page';
 import { ChatInterface } from './components/chat-interface';
+import { Dashboard } from './components/dashboard';
 import { initializePayPal } from '../lib/subscriptions';
 import { PAYPAL_CONFIG } from '../lib/paypal-config';
 import { paypalService } from '../lib/paypal';
@@ -13,6 +14,7 @@ function AppContent() {
   const { user, loading, refreshUser } = useAuth();
   const [showSignup, setShowSignup] = useState(false);
   const [processingSubscription, setProcessingSubscription] = useState(false);
+  const [currentView, setCurrentView] = useState<'dashboard' | 'chat'>('dashboard');
   const { socket, isConnected } = useSocket();
   // Use singleton instance
 
@@ -370,7 +372,11 @@ function AppContent() {
     );
   }
 
-  return <ChatInterface socket={socket} />;
+  return currentView === 'dashboard' ? (
+    <Dashboard onStartChat={() => setCurrentView('chat')} />
+  ) : (
+    <ChatInterface socket={socket} onExit={() => setCurrentView('dashboard')} />
+  );
 }
 
 export default function App() {
