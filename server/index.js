@@ -54,6 +54,11 @@ function findMatch(user) {
   
   // Find a match (first available user)
   const match = allWaitingUsers.find(u => {
+    // 🛡️ Rematch Prevention
+    if (user.lastPartnerId === u.socketId || u.lastPartnerId === user.socketId) {
+      return false;
+    }
+
     // If user has a preference, check if match meets it
     if (user.preferredGender && user.preferredGender !== 'all' && user.tier === 'premium') {
       return u.gender === user.preferredGender;
@@ -233,6 +238,7 @@ io.on('connection', (socket) => {
       const partner = activeConnections.get(user.partnerId);
       if (partner) {
         partner.partnerId = null;
+        partner.lastPartnerId = socket.id; // Mark for rematch prevention
         activeConnections.set(user.partnerId, partner);
         
         // Put partner back in queue and start searching
@@ -280,8 +286,18 @@ io.on('connection', (socket) => {
     // Remove from queue and reset
     removeFromQueue(socket.id);
     if (user) {
+      user.lastPartnerId = user.partnerId; // Mark for rematch prevention
       user.partnerId = null;
       activeConnections.set(socket.id, user);
+
+      // Clear lastPartnerId after 30 seconds to allow possible rematch
+      setTimeout(() => {
+        const u = activeConnections.get(socket.id);
+        if (u) {
+          u.lastPartnerId = null;
+          activeConnections.set(socket.id, u);
+        }
+      }, 30000);
     }
     
     socket.emit('skipped');
@@ -299,6 +315,7 @@ io.on('connection', (socket) => {
       const partner = activeConnections.get(user.partnerId);
       if (partner) {
         partner.partnerId = null;
+        partner.lastPartnerId = socket.id; // Mark for rematch prevention
         activeConnections.set(user.partnerId, partner);
         
         // Put partner back in queue and start searching
@@ -364,6 +381,7 @@ io.on('connection', (socket) => {
       const partner = activeConnections.get(user.partnerId);
       if (partner) {
         partner.partnerId = null;
+        partner.lastPartnerId = socket.id; // Mark for rematch prevention
         activeConnections.set(user.partnerId, partner);
         
         // Put partner back in queue and start searching

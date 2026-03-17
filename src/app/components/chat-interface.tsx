@@ -105,6 +105,10 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
     // Server emits "matched" when a match is found
     socket.on("matched", async (data: { partnerId: string }) => {
       console.log(`🎯 [Signaling] Match found: ${data.partnerId} (Me: ${socket.id})`);
+      
+      // Safety delay to ensure previous connection teardown is complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       setPartnerId(data.partnerId);
       setIsSearching(false);
 
