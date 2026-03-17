@@ -65,23 +65,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         is_admin: !!metadata.is_admin
       });
 
-      // Fetch full profile from DB for extra fields (is_admin, tier from subscriptions etc)
-      const { data: profile } = await supabase
+      // Fetch full profile from DB in background (non-blocking)
+      supabase
         .from('profiles')
         .select('is_admin, tier, username, age, gender')
         .eq('id', supabaseUser.id)
-        .single();
-
-      if (profile) {
-        setUser(prev => prev ? { 
-          ...prev, 
-          is_admin: !!profile.is_admin,
-          // Sync other fields if they differ
-          username: profile.username || prev.username,
-          gender: profile.gender || prev.gender,
-          age: profile.age || prev.age
-        } : null);
-      }
+        .single()
+        .then(({ data: profile }: { data: any }) => {
+          if (profile) {
+            setUser(prev => prev ? { 
+              ...prev, 
+              is_admin: !!profile.is_admin,
+              // Sync other fields if they differ
+              username: profile.username || prev.username,
+              gender: (profile.gender as any) || prev.gender,
+              age: profile.age || prev.age
+            } : null);
+          }
+        })
+        .catch((err: any) => console.warn('Profile fetch failed:', err));
 
       // Fetch actual subscription tier in background (non-blocking)
       // This allows UI to render quickly while subscription status loads
