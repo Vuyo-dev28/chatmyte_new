@@ -155,17 +155,23 @@ export const useWebRTC = ({
         }
       });
       console.log("✅ Local tracks added");
-      
+
       // 🔥 Optimize bitrate for the video sender
-      const videoSender = pc.getSenders().find(s => s.track?.kind === "video");
-      if (videoSender) {
-        const params = videoSender.getParameters();
+      // After adding your video track
+      const sender = pc.getSenders().find(s => s.track?.kind === "video");
+
+      if (sender) {
+        const params = sender.getParameters();
+
         if (!params.encodings) params.encodings = [{}];
-        params.encodings[0].maxBitrate = 2500000; // 2.5 Mbps for HD quality
+
+        // Set max bitrate and framerate
+        params.encodings[0].maxBitrate = 2_500_000; // 2.5 Mbps
         params.encodings[0].maxFramerate = 30;
-        videoSender.setParameters(params).then(() => {
-          console.log("🚀 [WebRTC] Video bitrate optimized to 2.5Mbps");
-        }).catch(e => console.error("❌ [WebRTC] Error setting bitrate:", e));
+
+        sender.setParameters(params).catch(err => {
+          console.warn("Failed to set sender parameters:", err);
+        });
       }
     }
 
