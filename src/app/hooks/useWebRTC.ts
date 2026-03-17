@@ -182,8 +182,8 @@ export const useWebRTC = ({
   // Helper to inject bitrate into SDP
   const enhanceSDP = (sdp: string) => {
     return sdp.replace(
-      /a=fmtp:\d+ .*\r\n/g,
-      match => match + "x-google-start-bitrate=2000\r\n"
+      /(a=fmtp:\d+ .*)(\r\n)/g,
+      "$1;x-google-start-bitrate=2000$2"
     );
   };
 
