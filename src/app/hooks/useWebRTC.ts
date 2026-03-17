@@ -55,7 +55,7 @@ export const useWebRTC = ({
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
-        await localVideoRef.current.play().catch(() => {});
+        await localVideoRef.current.play().catch(() => { });
       }
 
       console.log("✅ Media initialized");
@@ -107,7 +107,7 @@ export const useWebRTC = ({
         // Prevent redundant srcObject assignments which can trigger AbortError
         if (remoteVideoRef.current.srcObject !== remoteStream) {
           remoteVideoRef.current.srcObject = remoteStream;
-          
+
           // Use a flag or check if already playing to avoid overlapping play() calls
           remoteVideoRef.current.play().catch((err) => {
             if (err.name !== 'AbortError') {
@@ -167,7 +167,7 @@ export const useWebRTC = ({
     try {
       const pc = await initializePeerConnection();
       console.log(`📥 [Signaling] Handling offer from ${from}. State: ${pc.signalingState}`);
-      
+
       const offerCollision =
         makingOfferRef.current || pc.signalingState !== "stable";
 
@@ -186,7 +186,7 @@ export const useWebRTC = ({
         console.log(`📥 Processing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
         iceCandidateQueueRef.current.forEach(candidate => {
           pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => {
-             if (e.name !== 'InvalidStateError') console.error("❌ ICE error:", e);
+            if (e.name !== 'InvalidStateError') console.error("❌ ICE error:", e);
           });
         });
         iceCandidateQueueRef.current = [];
@@ -282,7 +282,7 @@ export const useWebRTC = ({
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
-    
+
     makingOfferRef.current = false;
     ignoreOfferRef.current = false;
 
