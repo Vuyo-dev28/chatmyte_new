@@ -81,7 +81,8 @@ export function SubscriptionManagement() {
     
     socket.emit('subscription:cancel', { 
       subscriptionId: subscription.id,
-      reason: 'User requested cancellation'
+      reason: 'User requested cancellation',
+      userId: user?.id
     });
   };
 

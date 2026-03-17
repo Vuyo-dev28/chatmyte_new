@@ -1,67 +1,77 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../components/auth-context';
 
+// Singleton instance to be shared across the app
+let globalSocket: Socket | null = null;
+let listenersCount = 0;
+
 export function useSocket() {
   const { user } = useAuth();
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(globalSocket);
+  const [isConnected, setIsConnected] = useState(globalSocket?.connected || false);
 
   useEffect(() => {
-    if (!user) return;
-
-    // Get server URL from environment or use default
-    const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:8080';
-    
-    // Warn if using default localhost (server might not be running)
-    if (!import.meta.env.VITE_SERVER_URL) {
-      console.warn('[Socket] VITE_SERVER_URL not set, using default:', serverUrl);
-      console.warn('[Socket] Make sure your server is running on', serverUrl);
-    } else {
-      console.log('[Socket] Connecting to server:', serverUrl);
+    if (!user) {
+      if (globalSocket) {
+        console.log('[Socket] User logged out, closing socket');
+        globalSocket.close();
+        globalSocket = null;
+        setSocket(null);
+        setIsConnected(false);
+      }
+      return;
     }
 
-    // Connect to server
-    const newSocket = io(serverUrl, {
-      transports: ['websocket', 'polling'], // Allow fallback to polling
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
-      timeout: 10000, // 10 second timeout
-    });
+    listenersCount++;
 
-    socketRef.current = newSocket;
-    setSocket(newSocket);
+    if (!globalSocket) {
+      // Get server URL from environment or use default
+      const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:8080';
+      
+      console.log('[Socket] Creating new singleton connection to:', serverUrl);
 
-    newSocket.on('connect', () => {
-      console.log('[Socket] ✅ Connected to server:', serverUrl);
-      setIsConnected(true);
-    });
+      // Connect to server
+      globalSocket = io(serverUrl, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+        timeout: 10000,
+      });
 
-    newSocket.on('disconnect', (reason) => {
-      console.log('[Socket] ❌ Disconnected from server. Reason:', reason);
-      setIsConnected(false);
-    });
+      setSocket(globalSocket);
 
-    newSocket.on('connect_error', (error) => {
-      console.error('[Socket] Connection error:', error.message);
-      console.error('[Socket] Make sure the server is running on:', serverUrl);
-    });
+      globalSocket.on('connect', () => {
+        console.log('[Socket] ✅ Connected to server:', serverUrl);
+        setIsConnected(true);
+        if (user?.id) {
+          console.log('[Socket] Identifying user:', user.id);
+          globalSocket?.emit('identify', user.id);
+        }
+      });
 
-    newSocket.on('reconnect_attempt', (attemptNumber) => {
-      console.log('[Socket] Reconnection attempt', attemptNumber);
-    });
+      globalSocket.on('disconnect', (reason) => {
+        console.log('[Socket] ❌ Disconnected from server. Reason:', reason);
+        setIsConnected(false);
+      });
 
-    newSocket.on('reconnect_failed', () => {
-      console.error('[Socket] Failed to reconnect after all attempts');
-    });
+      globalSocket.on('connect_error', (error) => {
+        console.error('[Socket] Connection error:', error.message);
+      });
+    } else {
+      // Re-identify if user changed or just for safety
+      if (globalSocket.connected && user?.id) {
+        globalSocket.emit('identify', user.id);
+      }
+      setSocket(globalSocket);
+      setIsConnected(globalSocket.connected);
+    }
 
     return () => {
-      console.log('[Socket] Cleaning up socket connection');
-      newSocket.close();
-      socketRef.current = null;
-      setSocket(null);
+      listenersCount--;
+      // We don't close the socket on unmount because it's a singleton
+      // It stays open as long as the user is logged in
     };
   }, [user]);
 

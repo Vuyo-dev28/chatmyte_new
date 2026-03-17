@@ -198,21 +198,27 @@ io.on('connection', async (socket) => {
   console.log('User connected:', socket.id, 'from', geo.country);
 
   // Stats broadcast
-  const broadcastStats = () => {
-    const stats = getAdminStats();
-    io.to('admin_room').emit('admin:stats-update', stats);
-  };
+    const broadcastStats = () => {
+      const stats = getAdminStats();
+      io.to('admin_room').emit('admin:stats-update', stats);
+    };
 
-    socket.on('subscription:cancel', async ({ subscriptionId, reason }) => {
+    socket.on('identify', (userId) => {
+      console.log(`[Socket] Identifying socket ${socket.id} as user ${userId}`);
+      socket.userId = userId;
+    });
+
+    socket.on('subscription:cancel', async ({ subscriptionId, reason, userId }) => {
       try {
-        console.log(`[Subscription] Cancelling ${subscriptionId} for user ${socket.userId}`);
+        const effectiveUserId = userId || socket.userId || '';
+        console.log(`[Subscription] Cancelling ${subscriptionId} for user ${effectiveUserId}`);
         
         // 1. Get subscription details from Supabase to verify ownership and get PayPal ID
         const { data: subscription, error: fetchError } = await supabase
           .from('subscriptions')
           .select('*')
           .eq('id', subscriptionId)
-          .eq('user_id', socket.userId || '')
+          .eq('user_id', effectiveUserId)
           .single();
 
         if (fetchError || !subscription) {
