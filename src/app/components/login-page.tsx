@@ -48,8 +48,8 @@ export function LoginPage({ onSwitchToSignup }: LoginPageProps) {
     <div className="min-h-screen flex items-center justify-center bg-black p-4 sm:p-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-6 sm:mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full mb-3 sm:mb-4">
-            <Video className="w-6 h-6 sm:w-8 sm:h-8 text-black" />
+          <div className="inline-flex items-center justify-center w-24 h-24 mb-4">
+            <img src="/chatmyte_logo.png" alt="ChatMyte Logo" className="w-full h-full object-contain filter drop-shadow-xl" />
           </div>
           <h1 className="text-2xl sm:text-3xl text-yellow-400 mb-2">ChatMyte</h1>
           <p className="text-sm sm:text-base text-yellow-200/70">Meet new people instantly</p>

@@ -36,10 +36,8 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
       {/* --- Navigation Bar --- */}
       <nav className="border-b border-yellow-600/20 bg-black/40 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-lg flex items-center justify-center">
-              <Video className="w-5 h-5 text-black" />
-            </div>
+          <div className="flex items-center gap-3">
+            <img src="/chatmyte_logo.png" alt="ChatMyte" className="w-10 h-10 object-contain" />
             <span className="text-xl font-bold bg-gradient-to-r from-yellow-200 to-yellow-500 bg-clip-text text-transparent">
               ChatMyte
             </span>
@@ -202,13 +200,7 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
                 <div className="w-full max-w-sm mb-8">
                   <div className="relative">
                     <button 
-                      onClick={() => {
-                        if (user.tier !== 'premium') {
-                          setIsPremiumModalOpen(true);
-                          return;
-                        }
-                        setIsGenderMenuOpen(!isGenderMenuOpen);
-                      }}
+                      onClick={() => setIsGenderMenuOpen(!isGenderMenuOpen)}
                       className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md hover:bg-white/10 transition-all group"
                     >
                       <div className="flex items-center gap-3">
@@ -223,15 +215,12 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                         {user.tier !== 'premium' && (
-                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">PREMIUM</span>
-                         )}
                          <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-300 ${isGenderMenuOpen ? 'rotate-180' : ''}`} />
                       </div>
                     </button>
 
                     <AnimatePresence>
-                      {isGenderMenuOpen && user.tier === 'premium' && (
+                      {isGenderMenuOpen && (
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setIsGenderMenuOpen(false)} />
                           <motion.div 
@@ -244,6 +233,11 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
                               <button
                                 key={g}
                                 onClick={() => {
+                                  if (user.tier !== 'premium' && g !== 'all') {
+                                    setIsPremiumModalOpen(true);
+                                    setIsGenderMenuOpen(false);
+                                    return;
+                                  }
                                   setPreferredGender(g);
                                   setIsGenderMenuOpen(false);
                                 }}
@@ -251,7 +245,12 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
                                   preferredGender === g ? 'bg-yellow-500 text-black font-bold' : 'text-zinc-300 hover:bg-white/5'
                                 }`}
                               >
-                                <span className="capitalize">{g === 'all' ? 'Everyone' : g}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="capitalize">{g === 'all' ? 'Everyone' : g}</span>
+                                  {user.tier !== 'premium' && g !== 'all' && (
+                                    <ShieldCheck className="w-3 h-3 text-yellow-500/60" />
+                                  )}
+                                </div>
                                 {preferredGender === g && <div className="w-1.5 h-1.5 rounded-full bg-black" />}
                               </button>
                             ))}
