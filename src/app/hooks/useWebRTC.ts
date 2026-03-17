@@ -103,6 +103,16 @@ export const useWebRTC = ({
       console.log("📹 Remote track received");
 
       const remoteStream = event.streams[0];
+      
+      // Monitor track state for black-out recovery
+      event.track.onmute = () => {
+        console.log("🔇 Remote track muted");
+      };
+      event.track.onunmute = () => {
+        console.log("🔊 Remote track unmuted");
+        remoteVideoRef.current?.play().catch(() => {});
+      };
+
       if (remoteVideoRef.current) {
         // Prevent redundant srcObject assignments which can trigger AbortError
         if (remoteVideoRef.current.srcObject !== remoteStream) {
@@ -270,7 +280,15 @@ export const useWebRTC = ({
       track.enabled = isAudioEnabled;
     });
 
-  }, [isVideoEnabled, isAudioEnabled]);
+    // Explicitly re-trigger play() if enabling video/audio
+    if (isVideoEnabled || isAudioEnabled) {
+      setTimeout(() => {
+        localVideoRef.current?.play().catch(() => {});
+        remoteVideoRef.current?.play().catch(() => {});
+      }, 100);
+    }
+
+  }, [isVideoEnabled, isAudioEnabled, localVideoRef, remoteVideoRef]);
 
   // ===============================
   // 8️⃣ Cleanup
