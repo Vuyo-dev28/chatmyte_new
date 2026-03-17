@@ -86,7 +86,11 @@ export const useWebRTC = ({
   // ===============================
   const initializePeerConnection = useCallback(async () => {
     if (peerConnectionRef.current) {
-      return peerConnectionRef.current;
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+      iceCandidateQueueRef.current = [];
+      makingOfferRef.current = false;
+      ignoreOfferRef.current = false;
     }
 
     console.log("🔗 Creating PeerConnection...");
@@ -179,18 +183,13 @@ export const useWebRTC = ({
 
   }, [initializeMedia, socket, remoteVideoRef]);
 
-  // Helper to inject bitrate into SDP
-  const enhanceSDP = (sdp: string) => {
-    return sdp.replace(
-      /(a=fmtp:\d+ .*)(\r\n)/g,
-      "$1;x-google-start-bitrate=2000$2"
-    );
-  };
+  // No manual SDP patching needed; using sender parameters for bitrate
 
   // ===============================
   // 3️⃣ Create Offer
   // ===============================
   const createOffer = useCallback(async (targetId: string) => {
+    partnerIdRef.current = targetId; // Atomic update
     const pc = await initializePeerConnection();
 
     try {
@@ -203,11 +202,6 @@ export const useWebRTC = ({
       });
 
       if (pc.signalingState !== "stable") return;
-
-      // 🔥 Enhance offer SDP
-      if (offer.sdp) {
-        offer.sdp = enhanceSDP(offer.sdp);
-      }
 
       await pc.setLocalDescription(offer);
 
@@ -228,6 +222,7 @@ export const useWebRTC = ({
   // ===============================
   const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, from: string) => {
     try {
+      partnerIdRef.current = from; // Atomic update
       const pc = await initializePeerConnection();
       console.log(`📥 [Signaling] Handling offer from ${from}. State: ${pc.signalingState}`);
 
@@ -258,11 +253,6 @@ export const useWebRTC = ({
       }
 
       const answer = await pc.createAnswer();
-
-      // 🔥 Enhance answer SDP
-      if (answer.sdp) {
-        answer.sdp = enhanceSDP(answer.sdp);
-      }
 
       await pc.setLocalDescription(answer);
 
@@ -347,7 +337,7 @@ export const useWebRTC = ({
   // 8️⃣ Cleanup
   // ===============================
   const closePeerConnection = useCallback(() => {
-    console.log("🔗 Closing PeerConnection only...");
+    console.log("🔗 Closing PeerConnection & Resetting state...");
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
@@ -355,6 +345,7 @@ export const useWebRTC = ({
     makingOfferRef.current = false;
     ignoreOfferRef.current = false;
     iceCandidateQueueRef.current = [];
+    partnerIdRef.current = null; // Prevent leakage to old partner
   }, []);
 
   const stopMedia = useCallback(() => {
