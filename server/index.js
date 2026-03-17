@@ -187,8 +187,7 @@ io.on('connection', (socket) => {
     
     if (user && user.partnerId === targetId) {
       io.to(targetId).emit('answer', {
-        answer,
-        fromId: socket.id
+        answer
       });
     }
   });
@@ -202,8 +201,7 @@ io.on('connection', (socket) => {
     
     if (user && user.partnerId === targetId) {
       io.to(targetId).emit('ice-candidate', {
-        candidate,
-        fromId: socket.id
+        candidate
       });
     }
   });

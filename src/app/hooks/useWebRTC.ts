@@ -11,7 +11,9 @@ interface UseWebRTCProps {
 }
 
 const iceServers = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" }
+  ]
 };
 
 export const useWebRTC = ({
@@ -24,23 +26,26 @@ export const useWebRTC = ({
 }: UseWebRTCProps) => {
 
   const partnerIdRef = useRef<string | null>(partnerId);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const remoteStreamRef = useRef<MediaStream>(new MediaStream());
-  const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
-  const makingOfferRef = useRef(false);
 
   useEffect(() => {
     partnerIdRef.current = partnerId;
   }, [partnerId]);
 
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
+  const makingOfferRef = useRef(false);
+  const ignoreOfferRef = useRef(false);
+
   // ===============================
-  // 🎥 Initialize Media
+  // 1️⃣ Initialize Media (ONLY ONCE)
   // ===============================
   const initializeMedia = useCallback(async () => {
     if (localStreamRef.current) return localStreamRef.current;
 
     try {
+      console.log("🎥 Requesting media...");
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true
@@ -50,101 +55,105 @@ export const useWebRTC = ({
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
-        localVideoRef.current.muted = true;
-        await localVideoRef.current.play().catch(() => { });
+        await localVideoRef.current.play().catch(() => {});
       }
 
-      console.log("✅ Local media ready");
+      console.log("✅ Media initialized");
       return stream;
 
-    } catch (err) {
-      console.error("❌ Media error:", err);
+    } catch (error) {
+      console.error("❌ Media error:", error);
       return null;
     }
   }, [localVideoRef]);
 
   // ===============================
-  // 🔗 Create PeerConnection
+  // 2️⃣ Create Peer Connection
   // ===============================
   const initializePeerConnection = useCallback(async () => {
-    if (peerConnectionRef.current) return peerConnectionRef.current;
+    if (peerConnectionRef.current) {
+      return peerConnectionRef.current;
+    }
 
     console.log("🔗 Creating PeerConnection...");
+
     const pc = new RTCPeerConnection(iceServers);
     peerConnectionRef.current = pc;
 
     // ICE
     pc.onicecandidate = (event) => {
       if (event.candidate && partnerIdRef.current) {
-        console.log("📤 ICE →", partnerIdRef.current);
         socket.emit("ice-candidate", {
           candidate: event.candidate,
-          targetId: partnerIdRef.current
+          to: partnerIdRef.current
         });
       }
     };
 
-    // CONNECTION STATE
-    pc.onconnectionstatechange = () => {
-      console.log("🔗 Connection:", pc.connectionState);
-    };
-
     pc.oniceconnectionstatechange = () => {
-      console.log("🧊 ICE state:", pc.iceConnectionState);
+      console.log("ICE state:", pc.iceConnectionState);
     };
 
-    // ✅ FIXED REMOTE TRACK HANDLING
+    pc.onconnectionstatechange = () => {
+      console.log("Connection state:", pc.connectionState);
+    };
+
+    // Remote Track
     pc.ontrack = (event) => {
-      console.log("📹 Remote track:", event.track.kind);
+      console.log("📹 Remote track received");
 
-      remoteStreamRef.current.addTrack(event.track);
-
+      const remoteStream = event.streams[0];
       if (remoteVideoRef.current) {
-        if (remoteVideoRef.current.srcObject !== remoteStreamRef.current) {
-          remoteVideoRef.current.srcObject = remoteStreamRef.current;
-
-          remoteVideoRef.current.autoplay = true;
-          remoteVideoRef.current.muted = true; // 🔥 IMPORTANT for autoplay
-
-          remoteVideoRef.current.play().catch(() => { });
+        // Prevent redundant srcObject assignments which can trigger AbortError
+        if (remoteVideoRef.current.srcObject !== remoteStream) {
+          remoteVideoRef.current.srcObject = remoteStream;
+          
+          // Use a flag or check if already playing to avoid overlapping play() calls
+          remoteVideoRef.current.play().catch((err) => {
+            if (err.name !== 'AbortError') {
+              console.warn("[WebRTC] Error playing remote video:", err);
+            }
+          });
         }
       }
     };
 
-    // ADD LOCAL TRACKS
+    // Add local tracks BEFORE offer
     const stream = await initializeMedia();
     if (stream) {
-      stream.getTracks().forEach(track => {
+      stream.getTracks().forEach((track) => {
         pc.addTrack(track, stream);
       });
+      console.log("✅ Local tracks added");
     }
 
     return pc;
 
-  }, [initializeMedia, socket, remoteVideoRef]);
+  }, [initializeMedia, partnerId, socket, remoteVideoRef]);
 
   // ===============================
-  // 📤 CREATE OFFER
+  // 3️⃣ Create Offer
   // ===============================
   const createOffer = useCallback(async (targetId: string) => {
     const pc = await initializePeerConnection();
 
     try {
-      partnerIdRef.current = targetId;
       makingOfferRef.current = true;
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
+      });
 
-      const offer = await pc.createOffer();
+      if (pc.signalingState !== "stable") return;
+
       await pc.setLocalDescription(offer);
-
-      console.log("📤 Sending offer →", targetId);
 
       socket.emit("offer", {
         offer,
-        targetId
+        to: targetId
       });
-
     } catch (err) {
-      console.error("❌ Offer error:", err);
+      console.error("❌ Offer creation error:", err);
     } finally {
       makingOfferRef.current = false;
     }
@@ -152,64 +161,84 @@ export const useWebRTC = ({
   }, [initializePeerConnection, socket]);
 
   // ===============================
-  // 📥 HANDLE OFFER
+  // 4️⃣ Handle Offer
   // ===============================
   const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, from: string) => {
     try {
       const pc = await initializePeerConnection();
-      partnerIdRef.current = from;
+      console.log(`📥 [Signaling] Handling offer from ${from}. State: ${pc.signalingState}`);
+      
+      const offerCollision =
+        makingOfferRef.current || pc.signalingState !== "stable";
 
-      console.log("📥 Offer from:", from);
+      const isPolite = !socket.id || (socket.id > from);
+      ignoreOfferRef.current = isPolite && offerCollision;
+
+      if (ignoreOfferRef.current) {
+        console.warn("⚠️ [Signaling] Ignoring offer due to collision (polite peer logic)");
+        return;
+      }
 
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+      // Process queued ICE candidates
+      if (iceCandidateQueueRef.current.length > 0) {
+        console.log(`📥 Processing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
+        iceCandidateQueueRef.current.forEach(candidate => {
+          pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => {
+             if (e.name !== 'InvalidStateError') console.error("❌ ICE error:", e);
+          });
+        });
+        iceCandidateQueueRef.current = [];
+      }
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      console.log("📤 Sending answer →", from);
-
       socket.emit("answer", {
         answer,
-        targetId: from
+        to: from
       });
-
-      // Flush ICE queue
-      iceCandidateQueueRef.current.forEach(candidate => {
-        pc.addIceCandidate(new RTCIceCandidate(candidate));
-      });
-      iceCandidateQueueRef.current = [];
-
     } catch (err) {
-      console.error("❌ Handle offer error:", err);
+      console.error("❌ Offer handling error:", err);
     }
 
   }, [initializePeerConnection, socket]);
 
   // ===============================
-  // 📥 HANDLE ANSWER
+  // 5️⃣ Handle Answer
   // ===============================
   const handleAnswer = useCallback(async (answer: RTCSessionDescriptionInit) => {
     try {
       const pc = peerConnectionRef.current;
       if (!pc) return;
 
-      console.log("📥 Answer received");
+      console.log("📥 Handling answer...");
+
+      if (pc.signalingState !== "have-local-offer") {
+        console.warn("⚠️ Received answer in wrong state:", pc.signalingState);
+        return;
+      }
 
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
-      // Flush ICE queue
-      iceCandidateQueueRef.current.forEach(candidate => {
-        pc.addIceCandidate(new RTCIceCandidate(candidate));
-      });
-      iceCandidateQueueRef.current = [];
-
+      // Process queued ICE candidates
+      if (iceCandidateQueueRef.current.length > 0) {
+        console.log(`📥 Processing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
+        iceCandidateQueueRef.current.forEach(candidate => {
+          pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => {
+            if (e.name !== 'InvalidStateError') console.error("❌ ICE error:", e);
+          });
+        });
+        iceCandidateQueueRef.current = [];
+      }
     } catch (err) {
-      console.error("❌ Answer error:", err);
+      console.error("❌ Answer handling error:", err);
     }
   }, []);
 
   // ===============================
-  // 📥 HANDLE ICE
+  // 6️⃣ Handle ICE Candidate
   // ===============================
   const handleIceCandidate = useCallback(async (candidate: RTCIceCandidateInit) => {
     const pc = peerConnectionRef.current;
@@ -219,37 +248,46 @@ export const useWebRTC = ({
       if (pc.remoteDescription) {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
       } else {
+        console.log("⏳ Queueing ICE candidate (remote description not set)");
         iceCandidateQueueRef.current.push(candidate);
       }
-    } catch (err) {
-      console.error("❌ ICE error:", err);
+    } catch (error) {
+      console.error("❌ ICE error:", error);
     }
   }, []);
 
   // ===============================
-  // 🎛 Toggle Tracks
+  // 7️⃣ Toggle Tracks
   // ===============================
   useEffect(() => {
     if (!localStreamRef.current) return;
 
-    localStreamRef.current.getVideoTracks().forEach(t => t.enabled = isVideoEnabled);
-    localStreamRef.current.getAudioTracks().forEach(t => t.enabled = isAudioEnabled);
+    localStreamRef.current.getVideoTracks().forEach(track => {
+      track.enabled = isVideoEnabled;
+    });
+
+    localStreamRef.current.getAudioTracks().forEach(track => {
+      track.enabled = isAudioEnabled;
+    });
 
   }, [isVideoEnabled, isAudioEnabled]);
 
   // ===============================
-  // 🧹 Cleanup
+  // 8️⃣ Cleanup
   // ===============================
   const cleanup = useCallback(() => {
-    console.log("🧹 Cleanup");
+    console.log("🧹 Cleaning up WebRTC...");
 
-    peerConnectionRef.current?.close();
-    peerConnectionRef.current = null;
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    
+    makingOfferRef.current = false;
+    ignoreOfferRef.current = false;
 
-    localStreamRef.current?.getTracks().forEach(t => t.stop());
+    localStreamRef.current?.getTracks().forEach(track => track.stop());
     localStreamRef.current = null;
-
-    remoteStreamRef.current = new MediaStream();
     iceCandidateQueueRef.current = [];
   }, []);
 
