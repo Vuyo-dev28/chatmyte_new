@@ -12,7 +12,20 @@ interface UseWebRTCProps {
 
 const iceServers = {
   iceServers: [
-    { urls: "stun:stun.l.google.com:19302" }
+    // STUN (keep 1, that's enough)
+    { urls: "stun:stun.l.google.com:19302" },
+
+    // TURN (THIS is what fixes your issue)
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443",
+      username: "openrelayproject",
+      credential: "openrelayproject"
+    }
   ]
 };
 
@@ -91,11 +104,14 @@ export const useWebRTC = ({
     };
 
     pc.oniceconnectionstatechange = () => {
-      console.log("ICE state:", pc.iceConnectionState);
+      console.log("[WebRTC] ICE state:", pc.iceConnectionState);
+      if (pc.iceConnectionState === "failed") {
+        console.warn("[WebRTC] ICE connection failed, consider restarting or skipping");
+      }
     };
 
     pc.onconnectionstatechange = () => {
-      console.log("Connection state:", pc.connectionState);
+      console.log("[WebRTC] Connection state:", pc.connectionState);
     };
 
     // Remote Track
@@ -245,14 +261,17 @@ export const useWebRTC = ({
     if (!pc) return;
 
     try {
-      if (pc.remoteDescription) {
+      if (pc.remoteDescription && pc.remoteDescription.type) {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
       } else {
-        console.log("⏳ Queueing ICE candidate (remote description not set)");
+        console.log("⏳ Queueing ICE candidate (remote description not set or incomplete)");
         iceCandidateQueueRef.current.push(candidate);
       }
     } catch (error) {
-      console.error("❌ ICE error:", error);
+      // Ignore errors if the candidate is null or empty, which can happen at the end of gathering
+      if (candidate.candidate) {
+        console.error("❌ ICE error:", error);
+      }
     }
   }, []);
 

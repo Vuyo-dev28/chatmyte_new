@@ -140,8 +140,18 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
           🔍 Searching Overlay
       =============================== */}
       {isSearching && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black z-50 text-white text-xl">
-          Searching for partner...
+        <div className="absolute inset-0 flex items-center justify-center bg-black z-50 text-white text-xl flex-col gap-4">
+          <div className="animate-pulse">
+            {partnerId ? "Connecting to partner..." : "Searching for partner..."}
+          </div>
+          {partnerId && (
+            <button 
+              onClick={handleSkip}
+              className="mt-4 px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-sm rounded-full transition-colors"
+            >
+              Take too long? Skip
+            </button>
+          )}
         </div>
       )}
 
