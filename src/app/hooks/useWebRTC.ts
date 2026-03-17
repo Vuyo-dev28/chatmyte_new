@@ -57,7 +57,11 @@ export const useWebRTC = ({
       console.log("🎥 Requesting media...");
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30 }
+        },
         audio: true
       });
 
@@ -133,7 +137,7 @@ export const useWebRTC = ({
 
     // Add local tracks BEFORE offer
     const stream = await initializeMedia();
-    
+
     // Safety check: has the connection been closed while waiting for media?
     if (pc.signalingState === "closed") {
       console.warn("⚠️ [WebRTC] PeerConnection closed before tracks could be added");
@@ -151,11 +155,31 @@ export const useWebRTC = ({
         }
       });
       console.log("✅ Local tracks added");
+      
+      // 🔥 Optimize bitrate for the video sender
+      const videoSender = pc.getSenders().find(s => s.track?.kind === "video");
+      if (videoSender) {
+        const params = videoSender.getParameters();
+        if (!params.encodings) params.encodings = [{}];
+        params.encodings[0].maxBitrate = 2500000; // 2.5 Mbps for HD quality
+        params.encodings[0].maxFramerate = 30;
+        videoSender.setParameters(params).then(() => {
+          console.log("🚀 [WebRTC] Video bitrate optimized to 2.5Mbps");
+        }).catch(e => console.error("❌ [WebRTC] Error setting bitrate:", e));
+      }
     }
 
     return pc;
 
   }, [initializeMedia, socket, remoteVideoRef]);
+
+  // Helper to inject bitrate into SDP
+  const enhanceSDP = (sdp: string) => {
+    return sdp.replace(
+      /a=fmtp:\d+ .*\r\n/g,
+      match => match + "x-google-start-bitrate=2000\r\n"
+    );
+  };
 
   // ===============================
   // 3️⃣ Create Offer
@@ -165,7 +189,7 @@ export const useWebRTC = ({
 
     try {
       if (pc.signalingState === "closed") return;
-      
+
       makingOfferRef.current = true;
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
@@ -173,6 +197,11 @@ export const useWebRTC = ({
       });
 
       if (pc.signalingState !== "stable") return;
+
+      // 🔥 Enhance offer SDP
+      if (offer.sdp) {
+        offer.sdp = enhanceSDP(offer.sdp);
+      }
 
       await pc.setLocalDescription(offer);
 
@@ -223,6 +252,12 @@ export const useWebRTC = ({
       }
 
       const answer = await pc.createAnswer();
+
+      // 🔥 Enhance answer SDP
+      if (answer.sdp) {
+        answer.sdp = enhanceSDP(answer.sdp);
+      }
+
       await pc.setLocalDescription(answer);
 
       socket.emit("answer", {
