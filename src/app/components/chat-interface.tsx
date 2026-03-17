@@ -36,11 +36,12 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
   });
 
   // ===============================
-  // 🎯 Match Handling
+  // 🎯 Matchmaking Initialization
   // ===============================
   useEffect(() => {
     if (!socket || !user) return;
     
+    console.log("🚀 [Chat] Emitting join-queue...");
     // Server expects "join-queue" with userData
     socket.emit("join-queue", {
       userId: user.id,
@@ -49,7 +50,14 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
       tier: user.tier,
       preferredGender: 'all' // Default preference
     });
+  }, [socket, user]);
 
+  // ===============================
+  // 🎯 Signaling Event Listeners
+  // ===============================
+  useEffect(() => {
+    if (!socket || !user) return;
+    
     // Server emits "matched" when a match is found
     socket.on("matched", async (data: { partnerId: string }) => {
       console.log(`🎯 [Signaling] Match found: ${data.partnerId} (Me: ${socket.id})`);

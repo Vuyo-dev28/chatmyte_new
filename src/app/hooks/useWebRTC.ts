@@ -85,7 +85,7 @@ export const useWebRTC = ({
       if (event.candidate && partnerIdRef.current) {
         socket.emit("ice-candidate", {
           candidate: event.candidate,
-          to: partnerIdRef.current
+          targetId: partnerIdRef.current
         });
       }
     };
@@ -129,7 +129,7 @@ export const useWebRTC = ({
 
     return pc;
 
-  }, [initializeMedia, partnerId, socket, remoteVideoRef]);
+  }, [initializeMedia, socket, remoteVideoRef]);
 
   // ===============================
   // 3️⃣ Create Offer
@@ -150,7 +150,7 @@ export const useWebRTC = ({
 
       socket.emit("offer", {
         offer,
-        to: targetId
+        targetId: targetId
       });
     } catch (err) {
       console.error("❌ Offer creation error:", err);
@@ -197,7 +197,7 @@ export const useWebRTC = ({
 
       socket.emit("answer", {
         answer,
-        to: from
+        targetId: from
       });
     } catch (err) {
       console.error("❌ Offer handling error:", err);
