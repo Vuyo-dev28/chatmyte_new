@@ -133,9 +133,22 @@ export const useWebRTC = ({
 
     // Add local tracks BEFORE offer
     const stream = await initializeMedia();
+    
+    // Safety check: has the connection been closed while waiting for media?
+    if (pc.signalingState === "closed") {
+      console.warn("⚠️ [WebRTC] PeerConnection closed before tracks could be added");
+      return pc;
+    }
+
     if (stream) {
       stream.getTracks().forEach((track) => {
-        pc.addTrack(track, stream);
+        try {
+          if (pc.signalingState !== "closed") {
+            pc.addTrack(track, stream);
+          }
+        } catch (e) {
+          console.error("❌ [WebRTC] Error adding track:", e);
+        }
       });
       console.log("✅ Local tracks added");
     }
@@ -151,6 +164,8 @@ export const useWebRTC = ({
     const pc = await initializePeerConnection();
 
     try {
+      if (pc.signalingState === "closed") return;
+      
       makingOfferRef.current = true;
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
@@ -192,6 +207,8 @@ export const useWebRTC = ({
         return;
       }
 
+      if (pc.signalingState === "closed") return;
+
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
       // Process queued ICE candidates
@@ -228,10 +245,7 @@ export const useWebRTC = ({
 
       console.log("📥 Handling answer...");
 
-      if (pc.signalingState !== "have-local-offer") {
-        console.warn("⚠️ Received answer in wrong state:", pc.signalingState);
-        return;
-      }
+      if (pc.signalingState === "closed") return;
 
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
