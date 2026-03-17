@@ -26,6 +26,7 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isUserViewMain, setIsUserViewMain] = useState(false);
+  const [remoteAspectRatio, setRemoteAspectRatio] = useState<'landscape' | 'portrait'>('landscape');
 
   // ✅ ONE stable video ref per stream
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -72,6 +73,7 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
     console.log("🔄 [Chat] Joining/Resetting queue...");
     closePeerConnection(); // Keep media, only close peer connection
     setPartnerId(null);
+    setRemoteAspectRatio('landscape'); // Reset UI state
     setIsSearching(true);
     
     if (user) {
@@ -150,6 +152,18 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
       socket.off("partner-skipped");
     };
   }, [socket, user, createOffer, handleOffer, handleAnswer, handleIceCandidate, handlePartnerEvent]);
+  
+  const handleLoadedMetadata = () => {
+    if (remoteVideoRef.current) {
+      const { videoWidth, videoHeight } = remoteVideoRef.current;
+      console.log(`📹 Remote video metadata loaded: ${videoWidth}x${videoHeight}`);
+      if (videoHeight > videoWidth) {
+        setRemoteAspectRatio('portrait');
+      } else {
+        setRemoteAspectRatio('landscape');
+      }
+    }
+  };
 
   // ===============================
   // ❌ Exit Chat
@@ -202,14 +216,32 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
       {/* ===============================
           🎥 Remote Video (always mounted)
       =============================== */}
-      <video
-        ref={remoteVideoRef}
-        autoPlay
-        playsInline
-        className={`absolute inset-0 w-full h-full object-cover bg-neutral-900 transition-opacity ${
-          isSearching ? "opacity-0 duration-0" : "opacity-100 duration-500"
-        }`}
-      />
+      <div className="absolute inset-0 w-full h-full overflow-hidden bg-neutral-950">
+        {/* Blurred Background for Portrait Streams */}
+        {remoteAspectRatio === 'portrait' && !isSearching && (
+          <video
+            ref={(el) => {
+              if (el && remoteVideoRef.current && el.srcObject !== remoteVideoRef.current.srcObject) {
+                el.srcObject = remoteVideoRef.current.srcObject;
+              }
+            }}
+            autoPlay
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover scale-110 blur-3xl opacity-40 brightness-50"
+          />
+        )}
+        
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          onLoadedMetadata={handleLoadedMetadata}
+          className={`absolute inset-0 w-full h-full bg-transparent transition-opacity ${
+            isSearching ? "opacity-0 duration-0" : "opacity-100 duration-500"
+          } ${remoteAspectRatio === 'portrait' ? 'object-contain' : 'object-cover'}`}
+        />
+      </div>
 
       {/* ===============================
           🎥 Local Video (mini overlay)
