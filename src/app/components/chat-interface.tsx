@@ -167,12 +167,27 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
           <div className="animate-pulse">
             {partnerId ? "Connecting to partner..." : "Searching for partner..."}
           </div>
-          {partnerId && (
+          {partnerId ? (
+            <div className="flex gap-4">
+              <button 
+                onClick={handleSkip}
+                className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-sm rounded-full transition-colors border border-white/10"
+              >
+                Take too long? Skip
+              </button>
+              <button 
+                onClick={handleExit}
+                className="px-6 py-2 bg-red-500/20 hover:bg-red-500/40 text-red-500 text-sm rounded-full transition-colors border border-red-500/30"
+              >
+                Cancel Search
+              </button>
+            </div>
+          ) : (
             <button 
-              onClick={handleSkip}
-              className="mt-4 px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-sm rounded-full transition-colors"
+              onClick={handleExit}
+              className="mt-4 px-8 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-full transition-all border border-white/10 backdrop-blur-md"
             >
-              Take too long? Skip
+              Cancel & Exit
             </button>
           )}
         </div>
