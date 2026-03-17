@@ -153,17 +153,28 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
     };
   }, [socket, user, createOffer, handleOffer, handleAnswer, handleIceCandidate, handlePartnerEvent]);
   
-  const handleLoadedMetadata = () => {
+  const handleLoadedMetadata = useCallback(() => {
     if (remoteVideoRef.current) {
       const { videoWidth, videoHeight } = remoteVideoRef.current;
       console.log(`📹 Remote video metadata loaded: ${videoWidth}x${videoHeight}`);
-      if (videoHeight > videoWidth) {
-        setRemoteAspectRatio('portrait');
-      } else {
-        setRemoteAspectRatio('landscape');
+      if (videoWidth > 0 && videoHeight > 0) {
+        if (videoHeight > videoWidth) {
+          setRemoteAspectRatio('portrait');
+        } else {
+          setRemoteAspectRatio('landscape');
+        }
       }
     }
-  };
+  }, [remoteVideoRef]);
+
+  // Periodic check as a fallback for missing events
+  useEffect(() => {
+    if (isSearching) return;
+    const interval = setInterval(() => {
+      handleLoadedMetadata();
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isSearching, handleLoadedMetadata]);
 
   // ===============================
   // ❌ Exit Chat
@@ -237,6 +248,7 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
           autoPlay
           playsInline
           onLoadedMetadata={handleLoadedMetadata}
+          onResize={handleLoadedMetadata}
           className={`absolute inset-0 w-full h-full bg-transparent transition-opacity ${
             isSearching ? "opacity-0 duration-0" : "opacity-100 duration-500"
           } ${remoteAspectRatio === 'portrait' ? 'object-contain' : 'object-cover'}`}
