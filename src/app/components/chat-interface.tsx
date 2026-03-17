@@ -36,7 +36,9 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
     handleOffer,
     handleAnswer,
     handleIceCandidate,
-    cleanup
+    cleanup,
+    closePeerConnection,
+    stopMedia
   } = useWebRTC({
     socket,
     localVideoRef,
@@ -68,7 +70,7 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
   // ===============================
   const handleJoinQueue = useCallback(() => {
     console.log("🔄 [Chat] Joining/Resetting queue...");
-    cleanup();
+    closePeerConnection(); // Keep media, only close peer connection
     setPartnerId(null);
     setIsSearching(true);
     

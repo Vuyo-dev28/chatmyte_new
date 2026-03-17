@@ -346,31 +346,41 @@ export const useWebRTC = ({
   // ===============================
   // 8️⃣ Cleanup
   // ===============================
-  const cleanup = useCallback(() => {
-    console.log("🧹 Cleaning up WebRTC...");
-
+  const closePeerConnection = useCallback(() => {
+    console.log("🔗 Closing PeerConnection only...");
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
-
     makingOfferRef.current = false;
     ignoreOfferRef.current = false;
-
-    localStreamRef.current?.getTracks().forEach(track => track.stop());
-    localStreamRef.current = null;
     iceCandidateQueueRef.current = [];
   }, []);
+
+  const stopMedia = useCallback(() => {
+    console.log("🎥 Stopping all media tracks...");
+    localStreamRef.current?.getTracks().forEach(track => track.stop());
+    localStreamRef.current = null;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+  }, [localVideoRef]);
+
+  const cleanup = useCallback(() => {
+    console.log("🧹 Full WebRTC cleanup (PC + Media)...");
+    closePeerConnection();
+    stopMedia();
+  }, [closePeerConnection, stopMedia]);
 
   useEffect(() => {
     return () => cleanup();
   }, [cleanup]);
 
   return {
-    createOffer,
-    handleOffer,
     handleAnswer,
     handleIceCandidate,
-    cleanup
+    cleanup,
+    closePeerConnection,
+    stopMedia
   };
 };
