@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from './auth-context';
 import { SubscriptionManagement } from './subscription-management';
 import { PremiumModal } from './premium-modal';
+import { ProfileModal } from './profile-modal';
 import { Button } from './ui/button';
 import { 
   LogOut, 
@@ -20,6 +21,7 @@ interface DashboardProps {
 export function Dashboard({ onStartChat }: DashboardProps) {
   const { user, logout } = useAuth();
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   if (!user) return null;
 
@@ -95,6 +97,7 @@ export function Dashboard({ onStartChat }: DashboardProps) {
 
               <Button 
                 variant="outline"
+                onClick={() => setIsProfileModalOpen(true)}
                 className="w-full mt-6 border-yellow-600/20 bg-white/5 text-yellow-200 hover:bg-white/10"
               >
                 <Settings className="w-4 h-4 mr-2" />
@@ -156,6 +159,11 @@ export function Dashboard({ onStartChat }: DashboardProps) {
       <PremiumModal 
         isOpen={isPremiumModalOpen} 
         onClose={() => setIsPremiumModalOpen(false)} 
+      />
+      
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
       />
     </div>
   );

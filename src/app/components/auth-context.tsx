@@ -25,6 +25,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   upgradeToPremium: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateProfile: (data: { username?: string; gender?: 'male' | 'female' | 'other' }) => Promise<void>;
   loading: boolean;
 }
 
@@ -195,6 +196,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser({ ...user, tier: 'premium' });
   };
 
+  const updateProfile = async (data: { username?: string; gender?: 'male' | 'female' | 'other' }) => {
+    if (!user) return;
+
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        ...data
+      }
+    });
+
+    if (error) throw error;
+
+    setUser(prev => prev ? { ...prev, ...data } : null);
+  };
+
   const refreshUser = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
@@ -211,6 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         upgradeToPremium,
         refreshUser,
+        updateProfile,
         loading,
       }}
     >

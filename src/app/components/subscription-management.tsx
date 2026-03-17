@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { useAuth } from './auth-context';
 import { getActiveSubscription, cancelPayPalSubscription } from '../../lib/subscriptions';
 import { Crown, X, Loader2, AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import type { Subscription } from '../../lib/subscriptions';
 import {
   AlertDialog,
@@ -16,7 +17,7 @@ import {
 } from './ui/alert-dialog';
 
 export function SubscriptionManagement() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
@@ -55,6 +56,9 @@ export function SubscriptionManagement() {
     try {
       await cancelPayPalSubscription(subscription.id, 'User requested cancellation');
       await loadSubscription(); // Reload to get updated status
+      
+      await refreshUser(); // Update AuthContext via top-level hook
+      
       setCancelSuccess(true);
       // Auto-hide success message after 5 seconds
       setTimeout(() => {
@@ -124,33 +128,46 @@ export function SubscriptionManagement() {
       )}
 
       {isActive && (
-        <Button
-          onClick={handleCancelClick}
-          disabled={cancelling}
-          variant="outline"
-          className="w-full border-red-600/60 bg-red-900/20 text-red-300 hover:bg-red-900/30 h-9 text-sm"
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="mt-4"
         >
-          {cancelling ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Cancelling...
-            </>
-          ) : (
-            <>
-              <X className="w-4 h-4 mr-2" />
-              Cancel Subscription
-            </>
-          )}
-        </Button>
+          <Button
+            onClick={handleCancelClick}
+            disabled={cancelling}
+            variant="outline"
+            className="w-full border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/10 h-10 text-xs font-bold uppercase tracking-wider"
+          >
+            {cancelling ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <X className="w-4 h-4 mr-2" />
+                Cancel Subscription
+              </>
+            )}
+          </Button>
+        </motion.div>
       )}
 
-      {cancelSuccess && (
-        <div className="mt-3 p-3 bg-green-900/30 border border-green-600/50 rounded-lg">
-          <p className="text-green-300 text-sm">
-            ✓ Your subscription has been cancelled. You will retain access until the end of your billing period.
-          </p>
-        </div>
-      )}
+      <AnimatePresence>
+        {cancelSuccess && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded-xl"
+          >
+            <p className="text-green-400 text-xs font-medium">
+              ✓ Your subscription has been cancelled.
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {error && (
         <p className="text-red-400 text-sm mt-2">{error}</p>
