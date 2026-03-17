@@ -4,6 +4,7 @@ import { LoginPage } from './components/login-page';
 import { SignupPage } from './components/signup-page';
 import { ChatInterface } from './components/chat-interface';
 import { Dashboard } from './components/dashboard';
+import { AdminDashboard } from './components/admin-dashboard';
 import { initializePayPal } from '../lib/subscriptions';
 import { PAYPAL_CONFIG } from '../lib/paypal-config';
 import { paypalService } from '../lib/paypal';
@@ -14,7 +15,7 @@ function AppContent() {
   const { user, loading, refreshUser } = useAuth();
   const [showSignup, setShowSignup] = useState(false);
   const [processingSubscription, setProcessingSubscription] = useState(false);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'chat'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'chat' | 'admin'>('dashboard');
   const [preferredGender, setPreferredGender] = useState<'all' | 'male' | 'female' | 'other'>('all');
   const { socket, isConnected } = useSocket();
   // Use singleton instance
@@ -373,11 +374,16 @@ function AppContent() {
     );
   }
 
+  if (currentView === 'admin') {
+    return <AdminDashboard onBack={() => setCurrentView('dashboard')} />;
+  }
+
   return currentView === 'dashboard' ? (
     <Dashboard 
       onStartChat={() => setCurrentView('chat')} 
       preferredGender={preferredGender}
       setPreferredGender={setPreferredGender}
+      onOpenAdmin={() => setCurrentView('admin')}
     />
   ) : (
     <ChatInterface 

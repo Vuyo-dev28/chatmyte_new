@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import { createClient } from '@supabase/supabase-js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -12,6 +13,11 @@ const io = new Server(httpServer, {
     credentials: true
   }
 });
+
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.VITE_SUPABASE_ANON_KEY
+);
 
 app.use(cors());
 app.use(express.json());
@@ -38,7 +44,67 @@ const waitingQueue = {
 };
 
 // Store active connections
-const activeConnections = new Map(); // socketId -> { userId, partnerId, gender, tier }
+const activeConnections = new Map(); // socketId -> { userId, partnerId, gender, tier, country, connectedAt }
+
+// Admin verification
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@chatmyte.com";
+
+// Geolocation helper
+async function getGeoLocation(ip) {
+  // Simple check for localhost
+  if (ip === '::1' || ip === '127.0.0.1') return { country: 'Localhost' };
+  
+  try {
+    const response = await fetch(`http://ip-api.com/json/${ip}`);
+    const data = await response.json();
+    return { country: data.country || 'Unknown' };
+  } catch (err) {
+    console.error('GeoLocation error:', err);
+    return { country: 'Unknown' };
+  }
+}
+
+// Function to get admin stats
+function getAdminStats() {
+  const users = Array.from(activeConnections.values());
+  const stats = {
+    totalOnline: users.length,
+    queues: {
+      all: waitingQueue.all.length,
+      male: waitingQueue.male.length,
+      female: waitingQueue.female.length,
+      other: waitingQueue.other.length
+    },
+    genders: {
+      male: users.filter(u => u.gender === 'male').length,
+      female: users.filter(u => u.gender === 'female').length,
+      other: users.filter(u => u.gender === 'other').length
+    },
+    tiers: {
+      free: users.filter(u => u.tier === 'free').length,
+      premium: users.filter(u => u.tier === 'premium').length
+    },
+    inChat: users.filter(u => u.partnerId).length,
+    countries: {},
+    users: users.map(u => ({
+      socketId: u.socketId,
+      userId: u.userId,
+      username: u.username,
+      gender: u.gender,
+      tier: u.tier,
+      country: u.country,
+      is_admin: !!u.is_admin,
+      partnerId: u.partnerId
+    }))
+  };
+
+  users.forEach(u => {
+    const country = u.country || 'Unknown';
+    stats.countries[country] = (stats.countries[country] || 0) + 1;
+  });
+
+  return stats;
+}
 
 // Helper function to find a match
 function findMatch(user) {
@@ -106,12 +172,79 @@ function removeFromQueue(socketId) {
   });
 }
 
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+io.on('connection', async (socket) => {
+  const ip = socket.handshake.address.replace('::ffff:', '');
+  const geo = await getGeoLocation(ip);
+  console.log('User connected:', socket.id, 'from', geo.country);
 
-  socket.on('join-queue', (userData) => {
+  // Stats broadcast
+  const broadcastStats = () => {
+    const stats = getAdminStats();
+    io.to('admin_room').emit('admin:stats-update', stats);
+  };
+
+  socket.on('admin:join', async (email) => {
+    // Basic email check first as a fast filter
+    if (email === ADMIN_EMAIL) {
+      socket.join('admin_room');
+      socket.emit('admin:stats-update', getAdminStats());
+      return;
+    }
+
+    // fallback to DB check for other admins
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', socket.userId || '') // We need to store userId on socket if possible
+      .single();
+    
+    if (profile?.is_admin) {
+      socket.join('admin_room');
+      socket.emit('admin:stats-update', getAdminStats());
+    }
+  });
+
+  socket.on('admin:toggle-rights', async ({ targetUserId, isAdmin }) => {
+    // Verify caller is an admin
+    const callerId = Array.from(activeConnections.values()).find(u => u.socketId === socket.id)?.userId;
+    if (!callerId) return;
+
+    const { data: caller } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', callerId)
+      .single();
+
+    if (!caller?.is_admin) return;
+
+    // Perform update
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_admin: isAdmin })
+      .eq('id', targetUserId);
+
+    if (!error) {
+      // Update local state if user is online
+      activeConnections.forEach((val, key) => {
+        if (val.userId === targetUserId) {
+          val.is_admin = isAdmin;
+          activeConnections.set(key, val);
+          // Notify the user if they are online? Maybe just wait for refresh
+        }
+      });
+      broadcastStats();
+    }
+  });
+
+  socket.on('join-queue', async (userData) => {
     console.log('User joining queue:', socket.id, userData);
     
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', userData.userId)
+      .single();
+
     const user = {
       socketId: socket.id,
       userId: userData.userId,
@@ -119,10 +252,14 @@ io.on('connection', (socket) => {
       gender: userData.gender,
       preferredGender: userData.preferredGender || 'all',
       tier: userData.tier || 'free',
-      age: userData.age
+      age: userData.age,
+      is_admin: !!profile?.is_admin,
+      country: geo.country,
+      connectedAt: new Date().toISOString()
     };
     
     activeConnections.set(socket.id, user);
+    broadcastStats();
     
     // Try to find a match BEFORE adding to queue
     const match = findMatch(user);
@@ -434,6 +571,8 @@ io.on('connection', (socket) => {
     // Remove from queue
     removeFromQueue(socket.id);
     activeConnections.delete(socket.id);
+    const stats = getAdminStats();
+    io.to('admin_room').emit('admin:stats-update', stats);
     
     console.log('User disconnected:', socket.id);
   });

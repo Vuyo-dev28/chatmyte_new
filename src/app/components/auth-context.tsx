@@ -12,6 +12,7 @@ export interface User {
   tier: UserTier;
   gender?: 'male' | 'female' | 'other';
   age?: number;
+  is_admin?: boolean;
 }
 
 interface AuthContextType {
@@ -58,10 +59,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: supabaseUser.id,
         email: supabaseUser.email || '',
         username,
-        tier: initialTier, // Show immediately
+        tier: initialTier, 
         gender,
         age,
+        is_admin: !!metadata.is_admin
       });
+
+      // Fetch full profile from DB for extra fields (is_admin, tier from subscriptions etc)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin, tier, username, age, gender')
+        .eq('id', supabaseUser.id)
+        .single();
+
+      if (profile) {
+        setUser(prev => prev ? { 
+          ...prev, 
+          is_admin: !!profile.is_admin,
+          // Sync other fields if they differ
+          username: profile.username || prev.username,
+          gender: profile.gender || prev.gender,
+          age: profile.age || prev.age
+        } : null);
+      }
 
       // Fetch actual subscription tier in background (non-blocking)
       // This allows UI to render quickly while subscription status loads

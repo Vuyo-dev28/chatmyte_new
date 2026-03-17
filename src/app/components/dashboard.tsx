@@ -12,7 +12,8 @@ import {
   MessageSquare,
   Users,
   ChevronDown,
-  Crown
+  Crown,
+  LayoutDashboard
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -20,9 +21,10 @@ interface DashboardProps {
   onStartChat: () => void;
   preferredGender: 'all' | 'male' | 'female' | 'other';
   setPreferredGender: (gender: 'all' | 'male' | 'female' | 'other') => void;
+  onOpenAdmin: () => void;
 }
 
-export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: DashboardProps) {
+export function Dashboard({ onStartChat, preferredGender, setPreferredGender, onOpenAdmin }: DashboardProps) {
   const { user, logout } = useAuth();
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -31,6 +33,8 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
   const [isGenderMenuOpen, setIsGenderMenuOpen] = useState(false);
 
   if (!user) return null;
+
+  const isAdmin = !!user.is_admin;
 
   const openProfile = (tab: 'profile' | 'subscription' = 'profile') => {
     setProfileTab(tab);
@@ -107,6 +111,16 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
                           <Crown className="w-4 h-4 text-yellow-500" />
                           Manage Subscription
                         </button>
+                        
+                        {isAdmin && (
+                          <button 
+                            onClick={onOpenAdmin}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-yellow-500 hover:bg-yellow-500/5 transition-colors"
+                          >
+                            <LayoutDashboard className="w-4 h-4" />
+                            Admin Dashboard
+                          </button>
+                        )}
                         
                         {user.tier !== 'premium' && (
                           <button 
