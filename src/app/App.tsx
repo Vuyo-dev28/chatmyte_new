@@ -15,6 +15,7 @@ function AppContent() {
   const [showSignup, setShowSignup] = useState(false);
   const [processingSubscription, setProcessingSubscription] = useState(false);
   const [currentView, setCurrentView] = useState<'dashboard' | 'chat'>('dashboard');
+  const [preferredGender, setPreferredGender] = useState<'all' | 'male' | 'female' | 'other'>('all');
   const { socket, isConnected } = useSocket();
   // Use singleton instance
 
@@ -373,9 +374,18 @@ function AppContent() {
   }
 
   return currentView === 'dashboard' ? (
-    <Dashboard onStartChat={() => setCurrentView('chat')} />
+    <Dashboard 
+      onStartChat={() => setCurrentView('chat')} 
+      preferredGender={preferredGender}
+      setPreferredGender={setPreferredGender}
+    />
   ) : (
-    <ChatInterface socket={socket} onExit={() => setCurrentView('dashboard')} />
+    <ChatInterface 
+      socket={socket} 
+      onExit={() => setCurrentView('dashboard')} 
+      preferredGender={preferredGender}
+      setPreferredGender={setPreferredGender}
+    />
   );
 }
 

@@ -17,9 +17,11 @@ import { motion, AnimatePresence } from "motion/react";
 interface ChatInterfaceProps {
   socket: Socket;
   onExit: () => void;
+  preferredGender: 'all' | 'male' | 'female' | 'other';
+  setPreferredGender: (gender: 'all' | 'male' | 'female' | 'other') => void;
 }
 
-export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
+export function ChatInterface({ socket, onExit, preferredGender, setPreferredGender }: ChatInterfaceProps) {
   const { user } = useAuth();
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(true);
@@ -28,6 +30,8 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
   const [isUserViewMain, setIsUserViewMain] = useState(false);
   const [remoteAspectRatio, setRemoteAspectRatio] = useState<'landscape' | 'portrait'>('landscape');
   const [partnerInfo, setPartnerInfo] = useState<{ name: string; age: number } | null>(null);
+  const [currentSearchGender, setCurrentSearchGender] = useState(preferredGender);
+  const [isFallbackActive, setIsFallbackActive] = useState(false);
 
   // ✅ ONE stable video ref per stream
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -63,9 +67,10 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
       username: user.username,
       gender: user.gender,
       tier: user.tier,
-      preferredGender: 'all' // Default preference
+      age: user.age,
+      preferredGender: currentSearchGender
     });
-  }, [socket, user]);
+  }, [socket, user, currentSearchGender]);
 
   // ===============================
   // 🔄 Queue Management
@@ -84,16 +89,20 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
         username: user.username,
         gender: user.gender,
         tier: user.tier,
-        preferredGender: 'all'
+        age: user.age,
+        preferredGender: currentSearchGender
       });
     }
-  }, [cleanup, socket, user]);
+  }, [cleanup, socket, user, currentSearchGender]);
 
   const handleSkip = useCallback(() => {
     console.log("🔄 [Chat] Initiating skip...");
+    // Reset gender to user preference when skipping
+    setCurrentSearchGender(preferredGender);
+    setIsFallbackActive(false);
     socket.emit("skip");
     handleJoinQueue();
-  }, [socket, handleJoinQueue]);
+  }, [socket, handleJoinQueue, preferredGender]);
 
   const handlePartnerEvent = useCallback(() => {
     console.log("🔄 [Chat] Partner left or skipped. Re-joining...");
@@ -155,6 +164,31 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
       socket.off("partner-skipped");
     };
   }, [socket, user, createOffer, handleOffer, handleAnswer, handleIceCandidate, handlePartnerEvent]);
+
+  // ===============================
+  // ⏱️ 15s Fallback Logic
+  // ===============================
+  useEffect(() => {
+    if (!isSearching || preferredGender === 'all') {
+      setIsFallbackActive(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      console.log("⏱️ [Chat] 15s timeout reached. Falling back to 'all' genders...");
+      setIsFallbackActive(true);
+      setCurrentSearchGender('all');
+    }, 15000);
+
+    return () => clearTimeout(timer);
+  }, [isSearching, preferredGender]);
+
+  // Sync internal search gender with global preference when not in fallback
+  useEffect(() => {
+    if (!isFallbackActive) {
+      setCurrentSearchGender(preferredGender);
+    }
+  }, [preferredGender, isFallbackActive]);
   
   const handleLoadedMetadata = useCallback(() => {
     if (remoteVideoRef.current) {
@@ -198,8 +232,19 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
       =============================== */}
       {isSearching && (
         <div className="absolute inset-0 flex items-center justify-center bg-black z-50 text-white text-xl flex-col gap-4">
-          <div className="animate-pulse">
-            {partnerId ? "Connecting to partner..." : "Searching for partner..."}
+          <div className="flex flex-col items-center gap-2">
+            <div className="animate-pulse">
+              {partnerId ? "Connecting to partner..." : `Searching for ${currentSearchGender === 'all' ? 'anyone' : currentSearchGender + 's'}...`}
+            </div>
+            {isFallbackActive && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-yellow-500/80 bg-yellow-500/10 px-3 py-1 rounded-full border border-yellow-500/20"
+              >
+                Connecting to anyone available...
+              </motion.div>
+            )}
           </div>
           {partnerId ? (
             <div className="flex gap-4">
@@ -345,6 +390,40 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
               label="Exit"
             />
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ===============================
+          🏷️ Gender Filter (Floating)
+      =============================== */}
+      <AnimatePresence>
+        {!isSearching && (
+           <motion.div 
+             initial={{ x: -50, opacity: 0 }}
+             animate={{ x: 0, opacity: 1 }}
+             exit={{ x: -50, opacity: 0 }}
+             className="absolute top-20 left-6 z-40 bg-black/30 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl flex flex-col gap-1 shadow-2xl"
+           >
+             {(['all', 'male', 'female', 'other'] as const).map((g) => (
+                <button
+                  key={g}
+                  onClick={() => {
+                    if (user?.tier !== 'premium' && g !== 'all') {
+                      return; // Modal already handled in dashboard or just silent block
+                    }
+                    setPreferredGender(g);
+                  }}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                    preferredGender === g 
+                      ? "bg-yellow-500 text-black shadow-lg shadow-yellow-500/20" 
+                      : "text-zinc-500 hover:text-white hover:bg-white/5"
+                  } ${user?.tier !== 'premium' && g !== 'all' ? 'opacity-20 cursor-not-allowed' : ''}`}
+                  title={g === 'all' ? 'All Genders' : g.charAt(0).toUpperCase() + g.slice(1)}
+                >
+                  {g === 'all' ? <Users size={18} /> : g.charAt(0).toUpperCase()}
+                </button>
+             ))}
+           </motion.div>
         )}
       </AnimatePresence>
     </div>

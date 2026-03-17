@@ -16,9 +16,11 @@ import {
 
 interface DashboardProps {
   onStartChat: () => void;
+  preferredGender: 'all' | 'male' | 'female' | 'other';
+  setPreferredGender: (gender: 'all' | 'male' | 'female' | 'other') => void;
 }
 
-export function Dashboard({ onStartChat }: DashboardProps) {
+export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: DashboardProps) {
   const { user, logout } = useAuth();
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -126,6 +128,37 @@ export function Dashboard({ onStartChat }: DashboardProps) {
                 <p className="text-yellow-100/60 max-w-md mb-8 text-lg">
                   Meet interesting people from around the world instantly via random video chat.
                 </p>
+
+                {/* --- Matching Preferences (New) --- */}
+                <div className="w-full max-w-sm mb-8 p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+                  <div className="flex items-center justify-between mb-4 px-1">
+                    <span className="text-xs font-bold text-yellow-500 uppercase tracking-widest">Matching Preference</span>
+                    {user.tier !== 'premium' && (
+                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">PREMIUM</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {(['all', 'male', 'female', 'other'] as const).map((g) => (
+                      <button
+                        key={g}
+                        onClick={() => {
+                          if (user.tier !== 'premium' && g !== 'all') {
+                            setIsPremiumModalOpen(true);
+                            return;
+                          }
+                          setPreferredGender(g);
+                        }}
+                        className={`py-2 rounded-xl text-xs font-bold transition-all border ${
+                          preferredGender === g
+                            ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg shadow-yellow-500/20'
+                            : 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10'
+                        }`}
+                      >
+                        {g === 'all' ? 'Everyone' : g.charAt(0).toUpperCase() + g.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 <Button 
                   onClick={onStartChat}

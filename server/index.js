@@ -61,9 +61,14 @@ function findMatch(user) {
 
     // If user has a preference, check if match meets it
     if (user.preferredGender && user.preferredGender !== 'all' && user.tier === 'premium') {
-      return u.gender === user.preferredGender;
+      if (u.gender !== user.preferredGender) return false;
     }
-    // Otherwise, match with anyone
+
+    // If the match has a preference, check if user meets it
+    if (u.preferredGender && u.preferredGender !== 'all' && u.tier === 'premium') {
+      if (user.gender !== u.preferredGender) return false;
+    }
+
     return true;
   });
   
