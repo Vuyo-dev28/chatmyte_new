@@ -202,8 +202,8 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
         ref={remoteVideoRef}
         autoPlay
         playsInline
-        className={`absolute inset-0 w-full h-full object-cover bg-neutral-900 transition-opacity duration-700 ${
-          isSearching ? "opacity-30" : "opacity-100"
+        className={`absolute inset-0 w-full h-full object-cover bg-neutral-900 transition-opacity ${
+          isSearching ? "opacity-0 duration-0" : "opacity-100 duration-500"
         }`}
       />
 

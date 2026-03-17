@@ -86,11 +86,7 @@ export const useWebRTC = ({
   // ===============================
   const initializePeerConnection = useCallback(async () => {
     if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-      iceCandidateQueueRef.current = [];
-      makingOfferRef.current = false;
-      ignoreOfferRef.current = false;
+      closePeerConnection();
     }
 
     console.log("🔗 Creating PeerConnection...");
@@ -355,20 +351,49 @@ export const useWebRTC = ({
   // 8️⃣ Cleanup
   // ===============================
   const closePeerConnection = useCallback(() => {
-    console.log("🔗 Closing PeerConnection & Resetting state...");
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
+    console.log("🔗 [WebRTC] Aggressive teardown: Closing PeerConnection & Resetting state...");
+    const pc = peerConnectionRef.current;
+    
+    if (pc) {
+      // 1. Strip all listeners instantly to stop incoming events
+      pc.onicecandidate = null;
+      pc.oniceconnectionstatechange = null;
+      pc.onconnectionstatechange = null;
+      pc.ontrack = null;
+      pc.onsignalingstatechange = null;
+
+      // 2. Remove all tracks to stop outbound data instantly
+      pc.getSenders().forEach(s => {
+        try {
+          pc.removeTrack(s);
+        } catch (e) {}
+      });
+
+      // 3. Clear remote video and explicit track stopping to avoid "ghosting"
+      if (remoteVideoRef.current && remoteVideoRef.current.srcObject) {
+        try {
+          const stream = remoteVideoRef.current.srcObject as MediaStream;
+          stream.getTracks().forEach(t => t.stop());
+        } catch (e) {
+          console.warn("[WebRTC] Error stopping remote tracks:", e);
+        }
+        remoteVideoRef.current.srcObject = null;
+        remoteVideoRef.current.src = ""; // Force clear src
+        try {
+          remoteVideoRef.current.load(); // Force browser reset
+        } catch (e) {}
+      }
+
+      // 3. Final close
+      pc.close();
       peerConnectionRef.current = null;
     }
+
+    // 4. Reset internal signaling flags
     makingOfferRef.current = false;
     ignoreOfferRef.current = false;
     iceCandidateQueueRef.current = [];
-    partnerIdRef.current = null; // Prevent leakage to old partner
-    
-    // Clear remote video
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
+    partnerIdRef.current = null; // Strictly prevent leakage to old partner
   }, [remoteVideoRef]);
 
   const stopMedia = useCallback(() => {
