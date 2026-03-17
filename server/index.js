@@ -213,16 +213,16 @@ io.on('connection', async (socket) => {
         const effectiveUserId = userId || socket.userId || '';
         console.log(`[Subscription] Cancelling ${subscriptionId} for user ${effectiveUserId}`);
         
-        // 1. Get subscription details from Supabase to verify ownership and get PayPal ID
+        // 1. Get subscription details bypassing RLS via RPC
         const { data: subscription, error: fetchError } = await supabase
-          .from('subscriptions')
-          .select('*')
-          .eq('id', subscriptionId)
-          .eq('user_id', effectiveUserId)
-          .single();
+          .rpc('get_subscription_admin', { 
+            sub_id: subscriptionId, 
+            u_id: effectiveUserId 
+          })
+          .maybeSingle();
 
         if (fetchError || !subscription) {
-          console.error('[Subscription] Not found or unauthorized:', fetchError);
+          console.error('[Subscription] Not found or unauthorized:', fetchError || 'No record found');
           socket.emit('subscription:cancel-error', { message: 'Subscription not found' });
           return;
         }
@@ -237,14 +237,11 @@ io.on('connection', async (socket) => {
           }
         }
 
-        // 3. Update Supabase
+        // 3. Update Supabase bypassing RLS via RPC
         const { error: updateError } = await supabase
-          .from('subscriptions')
-          .update({
-            status: 'cancelled',
-            cancelled_at: new Date().toISOString()
-          })
-          .eq('id', subscriptionId);
+          .rpc('mark_subscription_cancelled_admin', { 
+            sub_id: subscriptionId 
+          });
 
         if (updateError) throw updateError;
 
