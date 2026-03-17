@@ -25,9 +25,17 @@ export const useWebRTC = ({
   partnerId
 }: UseWebRTCProps) => {
 
+  const partnerIdRef = useRef<string | null>(partnerId);
+
+  useEffect(() => {
+    partnerIdRef.current = partnerId;
+  }, [partnerId]);
+
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
+  const makingOfferRef = useRef(false);
+  const ignoreOfferRef = useRef(false);
 
   // ===============================
   // 1️⃣ Initialize Media (ONLY ONCE)
@@ -74,10 +82,10 @@ export const useWebRTC = ({
 
     // ICE
     pc.onicecandidate = (event) => {
-      if (event.candidate && partnerId) {
+      if (event.candidate && partnerIdRef.current) {
         socket.emit("ice-candidate", {
           candidate: event.candidate,
-          to: partnerId
+          to: partnerIdRef.current
         });
       }
     };
@@ -129,19 +137,26 @@ export const useWebRTC = ({
   const createOffer = useCallback(async (targetId: string) => {
     const pc = await initializePeerConnection();
 
-    console.log("📤 Creating offer...");
+    try {
+      makingOfferRef.current = true;
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
+      });
 
-    const offer = await pc.createOffer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true
-    });
+      if (pc.signalingState !== "stable") return;
 
-    await pc.setLocalDescription(offer);
+      await pc.setLocalDescription(offer);
 
-    socket.emit("offer", {
-      offer,
-      to: targetId
-    });
+      socket.emit("offer", {
+        offer,
+        to: targetId
+      });
+    } catch (err) {
+      console.error("❌ Offer creation error:", err);
+    } finally {
+      makingOfferRef.current = false;
+    }
 
   }, [initializePeerConnection, socket]);
 
@@ -149,28 +164,44 @@ export const useWebRTC = ({
   // 4️⃣ Handle Offer
   // ===============================
   const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, from: string) => {
-    const pc = await initializePeerConnection();
+    try {
+      const pc = await initializePeerConnection();
+      console.log(`📥 [Signaling] Handling offer from ${from}. State: ${pc.signalingState}`);
+      
+      const offerCollision =
+        makingOfferRef.current || pc.signalingState !== "stable";
 
-    console.log("📥 Handling offer...");
+      const isPolite = !socket.id || (socket.id > from);
+      ignoreOfferRef.current = isPolite && offerCollision;
 
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      if (ignoreOfferRef.current) {
+        console.warn("⚠️ [Signaling] Ignoring offer due to collision (polite peer logic)");
+        return;
+      }
 
-    // Process queued ICE candidates
-    if (iceCandidateQueueRef.current.length > 0) {
-      console.log(`📥 Processing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
-      iceCandidateQueueRef.current.forEach(candidate => {
-        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("❌ ICE error:", e));
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+      // Process queued ICE candidates
+      if (iceCandidateQueueRef.current.length > 0) {
+        console.log(`📥 Processing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
+        iceCandidateQueueRef.current.forEach(candidate => {
+          pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => {
+             if (e.name !== 'InvalidStateError') console.error("❌ ICE error:", e);
+          });
+        });
+        iceCandidateQueueRef.current = [];
+      }
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      socket.emit("answer", {
+        answer,
+        to: from
       });
-      iceCandidateQueueRef.current = [];
+    } catch (err) {
+      console.error("❌ Offer handling error:", err);
     }
-
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-
-    socket.emit("answer", {
-      answer,
-      to: from
-    });
 
   }, [initializePeerConnection, socket]);
 
@@ -178,22 +209,32 @@ export const useWebRTC = ({
   // 5️⃣ Handle Answer
   // ===============================
   const handleAnswer = useCallback(async (answer: RTCSessionDescriptionInit) => {
-    const pc = peerConnectionRef.current;
-    if (!pc) return;
+    try {
+      const pc = peerConnectionRef.current;
+      if (!pc) return;
 
-    console.log("📥 Handling answer...");
+      console.log("📥 Handling answer...");
 
-    await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      if (pc.signalingState !== "have-local-offer") {
+        console.warn("⚠️ Received answer in wrong state:", pc.signalingState);
+        return;
+      }
 
-    // Process queued ICE candidates
-    if (iceCandidateQueueRef.current.length > 0) {
-      console.log(`📥 Processing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
-      iceCandidateQueueRef.current.forEach(candidate => {
-        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error("❌ ICE error:", e));
-      });
-      iceCandidateQueueRef.current = [];
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+      // Process queued ICE candidates
+      if (iceCandidateQueueRef.current.length > 0) {
+        console.log(`📥 Processing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
+        iceCandidateQueueRef.current.forEach(candidate => {
+          pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => {
+            if (e.name !== 'InvalidStateError') console.error("❌ ICE error:", e);
+          });
+        });
+        iceCandidateQueueRef.current = [];
+      }
+    } catch (err) {
+      console.error("❌ Answer handling error:", err);
     }
-
   }, []);
 
   // ===============================
@@ -237,8 +278,13 @@ export const useWebRTC = ({
   const cleanup = useCallback(() => {
     console.log("🧹 Cleaning up WebRTC...");
 
-    peerConnectionRef.current?.close();
-    peerConnectionRef.current = null;
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    
+    makingOfferRef.current = false;
+    ignoreOfferRef.current = false;
 
     localStreamRef.current?.getTracks().forEach(track => track.stop());
     localStreamRef.current = null;

@@ -52,13 +52,16 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
 
     // Server emits "matched" when a match is found
     socket.on("matched", async (data: { partnerId: string }) => {
-      console.log("🎯 Match found:", data.partnerId);
+      console.log(`🎯 [Signaling] Match found: ${data.partnerId} (Me: ${socket.id})`);
       setPartnerId(data.partnerId);
       setIsSearching(false);
 
       // deterministic offer creator (lexicographical order)
       if (socket.id && socket.id < data.partnerId) {
+        console.log(`📤 [Signaling] I am the offerer (< ${data.partnerId})`);
         await createOffer(data.partnerId);
+      } else {
+        console.log(`📥 [Signaling] I am the answerer (>= ${data.partnerId})`);
       }
     });
 
@@ -96,6 +99,7 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
   // 🔄 Skip Chat
   // ===============================
   const handleSkip = useCallback(() => {
+    console.log("🔄 [Chat] Skipping current partner...");
     cleanup();
     setPartnerId(null);
     setIsSearching(true);
