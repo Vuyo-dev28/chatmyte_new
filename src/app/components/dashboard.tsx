@@ -11,8 +11,10 @@ import {
   User as UserIcon, 
   ShieldCheck,
   MessageSquare,
-  Users
+  Users,
+  ChevronDown
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface DashboardProps {
   onStartChat: () => void;
@@ -24,6 +26,8 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
   const { user, logout } = useAuth();
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isGenderMenuOpen, setIsGenderMenuOpen] = useState(false);
 
   if (!user) return null;
 
@@ -44,19 +48,84 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsPremiumModalOpen(true)}
-              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-yellow-600/30 bg-yellow-600/10 text-yellow-300 text-sm hover:bg-yellow-600/20 transition-all"
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-yellow-600/30 bg-yellow-600/10 text-yellow-300 text-sm hover:bg-yellow-600/20 transition-all font-medium"
             >
               <ShieldCheck className="w-4 h-4" />
               <span>{user.tier === 'premium' ? 'Premium Active' : 'Upgrade'}</span>
             </button>
-            <Button
-              variant="ghost"
-              onClick={logout}
-              className="text-yellow-200/60 hover:text-yellow-100 hover:bg-white/5"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              <span className="hidden sm:inline">Logout</span>
-            </Button>
+
+            {/* --- User Menu Dropdown --- */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center gap-2 p-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+              >
+                <div className="w-8 h-8 rounded-full bg-yellow-600/20 flex items-center justify-center border border-yellow-500/40">
+                  <UserIcon className="w-4 h-4 text-yellow-400" />
+                </div>
+                <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              <AnimatePresence>
+                {isUserMenuOpen && (
+                  <>
+                    {/* Backdrop for closing */}
+                    <div 
+                      className="fixed inset-0 z-10" 
+                      onClick={() => setIsUserMenuOpen(false)} 
+                    />
+                    
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute right-0 mt-3 w-64 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-20 backdrop-blur-xl"
+                    >
+                      <div className="p-4 border-b border-white/5 bg-white/5">
+                        <p className="text-sm font-bold text-white">{user.username}</p>
+                        <p className="text-xs text-zinc-500 truncate">{user.email}</p>
+                      </div>
+                      
+                      <div className="p-2">
+                        <button 
+                          onClick={() => {
+                            setIsProfileModalOpen(true);
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
+                        >
+                          <Settings className="w-4 h-4" />
+                          Edit Profile
+                        </button>
+                        
+                        {user.tier !== 'premium' && (
+                          <button 
+                            onClick={() => {
+                              setIsPremiumModalOpen(true);
+                              setIsUserMenuOpen(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-yellow-500 hover:bg-yellow-500/5 transition-colors"
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                            Go Premium
+                          </button>
+                        )}
+
+                        <div className="h-px bg-white/5 my-2" />
+                        
+                        <button 
+                          onClick={logout}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-400/5 transition-colors text-left"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          Logout
+                        </button>
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </nav>
@@ -129,40 +198,73 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
                   Meet interesting people from around the world instantly via random video chat.
                 </p>
 
-                {/* --- Matching Preferences (New) --- */}
-                <div className="w-full max-w-sm mb-8 p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-                  <div className="flex items-center justify-between mb-4 px-1">
-                    <span className="text-xs font-bold text-yellow-500 uppercase tracking-widest">Matching Preference</span>
-                    {user.tier !== 'premium' && (
-                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">PREMIUM</span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {(['all', 'male', 'female', 'other'] as const).map((g) => (
-                      <button
-                        key={g}
-                        onClick={() => {
-                          if (user.tier !== 'premium' && g !== 'all') {
-                            setIsPremiumModalOpen(true);
-                            return;
-                          }
-                          setPreferredGender(g);
-                        }}
-                        className={`py-2 rounded-xl text-xs font-bold transition-all border ${
-                          preferredGender === g
-                            ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg shadow-yellow-500/20'
-                            : 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10'
-                        }`}
-                      >
-                        {g === 'all' ? 'Everyone' : g.charAt(0).toUpperCase() + g.slice(1)}
-                      </button>
-                    ))}
+                {/* --- Matching Preferences (Dropdown Style) --- */}
+                <div className="w-full max-w-sm mb-8">
+                  <div className="relative">
+                    <button 
+                      onClick={() => {
+                        if (user.tier !== 'premium') {
+                          setIsPremiumModalOpen(true);
+                          return;
+                        }
+                        setIsGenderMenuOpen(!isGenderMenuOpen);
+                      }}
+                      className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md hover:bg-white/10 transition-all group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center border border-yellow-500/40">
+                          <Users className="w-4 h-4 text-yellow-500" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest leading-none mb-1">Looking for</p>
+                          <p className="text-sm font-bold text-white leading-none capitalize">
+                            {preferredGender === 'all' ? 'Everyone' : preferredGender}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                         {user.tier !== 'premium' && (
+                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">PREMIUM</span>
+                         )}
+                         <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-300 ${isGenderMenuOpen ? 'rotate-180' : ''}`} />
+                      </div>
+                    </button>
+
+                    <AnimatePresence>
+                      {isGenderMenuOpen && user.tier === 'premium' && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setIsGenderMenuOpen(false)} />
+                          <motion.div 
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="absolute bottom-full mb-3 w-full bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-20"
+                          >
+                            {(['all', 'male', 'female', 'other'] as const).map((g) => (
+                              <button
+                                key={g}
+                                onClick={() => {
+                                  setPreferredGender(g);
+                                  setIsGenderMenuOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between px-4 py-3 text-sm transition-colors ${
+                                  preferredGender === g ? 'bg-yellow-500 text-black font-bold' : 'text-zinc-300 hover:bg-white/5'
+                                }`}
+                              >
+                                <span className="capitalize">{g === 'all' ? 'Everyone' : g}</span>
+                                {preferredGender === g && <div className="w-1.5 h-1.5 rounded-full bg-black" />}
+                              </button>
+                            ))}
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </div>
 
                 <Button 
                   onClick={onStartChat}
-                  className="px-10 h-14 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-bold text-lg rounded-full shadow-xl shadow-yellow-500/20 hover:scale-105 active:scale-95 transition-all"
+                  className="px-10 h-14 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-bold text-lg rounded-full shadow-xl shadow-yellow-500/20 hover:scale-105 active:scale-95 transition-all w-full max-w-sm"
                 >
                   START CHATTING NOW
                 </Button>
