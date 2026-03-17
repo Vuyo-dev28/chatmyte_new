@@ -134,7 +134,7 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender }: 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* --- Left Column: Profile & Stats --- */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className="hidden lg:block lg:col-span-1 space-y-6">
             <div className="p-6 rounded-2xl border border-yellow-600/20 bg-gradient-to-b from-yellow-900/10 to-transparent backdrop-blur-sm">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-16 h-16 rounded-full bg-yellow-600/20 border-2 border-yellow-500/40 flex items-center justify-center overflow-hidden">
