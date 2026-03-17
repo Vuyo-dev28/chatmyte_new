@@ -10,7 +10,8 @@ import {
   SkipForward, 
   LogOut, 
   MonitorPlay,
-  Maximize2
+  Maximize2,
+  Users
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
