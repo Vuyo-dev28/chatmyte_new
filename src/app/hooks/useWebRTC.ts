@@ -83,9 +83,10 @@ export const useWebRTC = ({
     // ICE
     pc.onicecandidate = (event) => {
       if (event.candidate && partnerIdRef.current) {
+        console.log("📤 [Signaling] Sending ICE candidate to:", partnerIdRef.current);
         socket.emit("ice-candidate", {
           candidate: event.candidate,
-          to: partnerIdRef.current
+          targetId: partnerIdRef.current
         });
       }
     };
@@ -139,7 +140,7 @@ export const useWebRTC = ({
 
     return pc;
 
-  }, [initializeMedia, partnerId, socket, remoteVideoRef]);
+  }, [initializeMedia, socket, remoteVideoRef]);
 
   // ===============================
   // 3️⃣ Create Offer
@@ -148,6 +149,7 @@ export const useWebRTC = ({
     const pc = await initializePeerConnection();
 
     try {
+      partnerIdRef.current = targetId; // Sync immediately
       makingOfferRef.current = true;
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
@@ -158,9 +160,10 @@ export const useWebRTC = ({
 
       await pc.setLocalDescription(offer);
 
+      console.log(`📤 [Signaling] Sending offer to: ${targetId}`);
       socket.emit("offer", {
         offer,
-        to: targetId
+        targetId: targetId
       });
     } catch (err) {
       console.error("❌ Offer creation error:", err);
@@ -177,6 +180,7 @@ export const useWebRTC = ({
     try {
       const pc = await initializePeerConnection();
       console.log(`📥 [Signaling] Handling offer from ${from}. State: ${pc.signalingState}`);
+      partnerIdRef.current = from; // Sync immediately
       
       const offerCollision =
         makingOfferRef.current || pc.signalingState !== "stable";
@@ -193,7 +197,7 @@ export const useWebRTC = ({
 
       // Process queued ICE candidates
       if (iceCandidateQueueRef.current.length > 0) {
-        console.log(`📥 Processing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
+        console.log(`📥 [Signaling] Processing ${iceCandidateQueueRef.current.length} queued ICE candidates`);
         iceCandidateQueueRef.current.forEach(candidate => {
           pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => {
              if (e.name !== 'InvalidStateError') console.error("❌ ICE error:", e);
@@ -205,9 +209,10 @@ export const useWebRTC = ({
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
+      console.log(`📤 [Signaling] Sending answer to: ${from}`);
       socket.emit("answer", {
         answer,
-        to: from
+        targetId: from
       });
     } catch (err) {
       console.error("❌ Offer handling error:", err);
