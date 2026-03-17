@@ -58,8 +58,8 @@ export const useWebRTC = ({
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280, max: 1920 },
-          height: { ideal: 720, max: 1080 },
+          width: { min: 1280, ideal: 1920, max: 1920 },
+          height: { min: 720, ideal: 1080, max: 1080 },
           frameRate: { ideal: 30 }
         },
         audio: true
@@ -123,7 +123,7 @@ export const useWebRTC = ({
       if (remoteVideoRef.current) {
         // Force reset the video element to a clean state
         remoteVideoRef.current.srcObject = remoteStream;
-        
+
         remoteVideoRef.current.play().catch((err: any) => {
           if (err.name !== 'AbortError') {
             console.warn("[WebRTC] Error playing remote video:", err);
@@ -156,19 +156,19 @@ export const useWebRTC = ({
       // 🔥 Optimize bitrate for the video sender
       // After adding your video track
       const sender = pc.getSenders().find(s => s.track?.kind === "video");
-
       if (sender) {
         const params = sender.getParameters();
-
         if (!params.encodings) params.encodings = [{}];
 
-        // Set max bitrate and framerate
-        params.encodings[0].maxBitrate = 2_500_000; // 2.5 Mbps
+        // 🔥 Force HD Quality
+        params.degradationPreference = 'maintain-resolution';
+        params.encodings[0].maxBitrate = 4_000_000; // 4 Mbps
         params.encodings[0].maxFramerate = 30;
 
-        sender.setParameters(params).catch(err => {
-          console.warn("Failed to set sender parameters:", err);
+        sender.setParameters(params).catch((err: any) => {
+          console.warn("[WebRTC] Failed to set sender parameters:", err);
         });
+        console.log("🚀 [WebRTC] Quality boosted: 1080p @ 4Mbps");
       }
     }
 
@@ -350,7 +350,7 @@ export const useWebRTC = ({
   const closePeerConnection = useCallback(() => {
     console.log("🔗 [WebRTC] Aggressive teardown: Closing PeerConnection & Resetting state...");
     const pc = peerConnectionRef.current;
-    
+
     if (pc) {
       // 1. Strip all listeners instantly to stop incoming events
       pc.onicecandidate = null;
@@ -363,7 +363,7 @@ export const useWebRTC = ({
       pc.getSenders().forEach(s => {
         try {
           pc.removeTrack(s);
-        } catch (e) {}
+        } catch (e) { }
       });
 
       // 3. Clear remote video tracks to avoid "ghosting"
@@ -371,7 +371,7 @@ export const useWebRTC = ({
         try {
           const stream = remoteVideoRef.current.srcObject as MediaStream;
           stream.getTracks().forEach(t => t.stop());
-        } catch (e) {}
+        } catch (e) { }
         remoteVideoRef.current.srcObject = null;
       }
 
