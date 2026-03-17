@@ -152,7 +152,7 @@ io.on('connection', (socket) => {
         partnerInfo: {
           name: match.username,
           gender: match.gender,
-          age: match.age
+          age: match.age || 18
         }
       });
       
@@ -161,7 +161,7 @@ io.on('connection', (socket) => {
         partnerInfo: {
           name: user.username,
           gender: user.gender,
-          age: user.age
+          age: user.age || 18
         }
       });
     } else {

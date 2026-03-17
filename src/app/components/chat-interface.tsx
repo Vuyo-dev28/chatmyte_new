@@ -118,13 +118,16 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
     
     // Server emits "matched" when a match is found
     socket.on("matched", async (data: { partnerId: string; partnerInfo: { name: string; age: number } }) => {
-      console.log(`🎯 [Signaling] Match found: ${data.partnerId} (Me: ${socket.id})`);
+      console.log(`🎯 [Signaling] Match found: ${data.partnerId}`, data.partnerInfo);
       
       // Safety delay to ensure previous connection teardown is complete
       await new Promise(resolve => setTimeout(resolve, 100));
 
       setPartnerId(data.partnerId);
-      setPartnerInfo(data.partnerInfo);
+      setPartnerInfo({
+        name: data.partnerInfo.name || "User",
+        age: data.partnerInfo.age || 18
+      });
       setIsSearching(false);
 
       // deterministic offer creator (lexicographical order)
