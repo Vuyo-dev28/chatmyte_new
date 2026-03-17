@@ -11,6 +11,7 @@ export interface User {
   username: string;
   tier: UserTier;
   gender?: 'male' | 'female' | 'other';
+  age?: number;
 }
 
 interface AuthContextType {
@@ -20,12 +21,13 @@ interface AuthContextType {
     email: string,
     password: string,
     username: string,
-    gender: 'male' | 'female' | 'other'
+    gender: 'male' | 'female' | 'other',
+    age: number
   ) => Promise<boolean>;
   logout: () => Promise<void>;
   upgradeToPremium: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  updateProfile: (data: { username?: string; gender?: 'male' | 'female' | 'other' }) => Promise<void>;
+  updateProfile: (data: { username?: string; gender?: 'male' | 'female' | 'other'; age?: number }) => Promise<void>;
   loading: boolean;
 }
 
@@ -46,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         supabaseUser.email?.split('@')[0] ||
         'User';
       const gender = metadata.gender || 'male';
+      const age = metadata.age || 18;
 
       // Set user immediately with metadata tier (fast, no DB query)
       // Then update with actual subscription tier in background
@@ -57,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         username,
         tier: initialTier, // Show immediately
         gender,
+        age,
       });
 
       // Fetch actual subscription tier in background (non-blocking)
@@ -101,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeAuth();
 
     const { data: { subscription } } =
-      supabase.auth.onAuthStateChange(async (event, session) => {
+      supabase.auth.onAuthStateChange(async (event: any, session: any) => {
         if (!isMounted) return;
 
         console.log('[Auth] Event:', event, 'Session:', !!session);
@@ -131,7 +135,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     password: string,
     username: string,
-    gender: 'male' | 'female' | 'other'
+    gender: 'male' | 'female' | 'other',
+    age: number
   ) => {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -140,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data: {
           username,
           gender,
+          age,
           tier: 'free',
         },
       },
@@ -196,7 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser({ ...user, tier: 'premium' });
   };
 
-  const updateProfile = async (data: { username?: string; gender?: 'male' | 'female' | 'other' }) => {
+  const updateProfile = async (data: { username?: string; gender?: 'male' | 'female' | 'other'; age?: number }) => {
     if (!user) return;
 
     const { error } = await supabase.auth.updateUser({

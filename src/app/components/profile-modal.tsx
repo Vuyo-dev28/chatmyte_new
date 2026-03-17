@@ -20,6 +20,7 @@ interface ProfileModalProps {
 export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const { user, updateProfile } = useAuth();
   const [username, setUsername] = useState('');
+  const [age, setAge] = useState('18');
   const [gender, setGender] = useState<'male' | 'female' | 'other'>('male');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -29,6 +30,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     if (user && isOpen) {
       setUsername(user.username);
       setGender(user.gender || 'male');
+      setAge((user.age || 18).toString());
       setSuccess(false);
       setError('');
     }
@@ -44,7 +46,15 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     try {
       setLoading(true);
       setError('');
-      await updateProfile({ username, gender });
+      
+      const ageNum = parseInt(age);
+      if (isNaN(ageNum) || ageNum < 18) {
+        setError('Age must be at least 18');
+        setLoading(false);
+        return;
+      }
+
+      await updateProfile({ username, gender, age: ageNum });
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
@@ -115,6 +125,25 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Enter your username"
                     className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500/50 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Age Input */}
+              <div className="space-y-2">
+                <label htmlFor="age" className="text-sm font-medium text-zinc-400 ml-1">
+                  Age
+                </label>
+                <div className="relative group">
+                  <input
+                    id="age"
+                    type="number"
+                    min="18"
+                    max="100"
+                    value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    placeholder="Your age"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 px-4 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500/50 transition-all"
                   />
                 </div>
               </div>

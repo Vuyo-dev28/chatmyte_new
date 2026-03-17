@@ -27,6 +27,7 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isUserViewMain, setIsUserViewMain] = useState(false);
   const [remoteAspectRatio, setRemoteAspectRatio] = useState<'landscape' | 'portrait'>('landscape');
+  const [partnerInfo, setPartnerInfo] = useState<{ name: string; age: number } | null>(null);
 
   // ✅ ONE stable video ref per stream
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -73,6 +74,7 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
     console.log("🔄 [Chat] Joining/Resetting queue...");
     closePeerConnection(); // Keep media, only close peer connection
     setPartnerId(null);
+    setPartnerInfo(null);
     setRemoteAspectRatio('landscape'); // Reset UI state
     setIsSearching(true);
     
@@ -105,13 +107,14 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
     if (!socket || !user) return;
     
     // Server emits "matched" when a match is found
-    socket.on("matched", async (data: { partnerId: string }) => {
+    socket.on("matched", async (data: { partnerId: string; partnerInfo: { name: string; age: number } }) => {
       console.log(`🎯 [Signaling] Match found: ${data.partnerId} (Me: ${socket.id})`);
       
       // Safety delay to ensure previous connection teardown is complete
       await new Promise(resolve => setTimeout(resolve, 100));
 
       setPartnerId(data.partnerId);
+      setPartnerInfo(data.partnerInfo);
       setIsSearching(false);
 
       // deterministic offer creator (lexicographical order)
@@ -254,6 +257,20 @@ export function ChatInterface({ socket, onExit }: ChatInterfaceProps) {
           } ${remoteAspectRatio === 'portrait' ? 'object-contain' : 'object-cover'}`}
         />
       </div>
+
+      {/* ===============================
+          🏷️ Partner Info Overlay
+      =============================== */}
+      {!isSearching && partnerInfo && (
+        <div className="absolute top-6 left-6 z-40 flex flex-col gap-1">
+          <div className="flex items-center gap-2 px-4 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-full shadow-2xl">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-white font-medium text-sm sm:text-base">
+              {partnerInfo.name}, {partnerInfo.age}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ===============================
           🎥 Local Video (mini overlay)

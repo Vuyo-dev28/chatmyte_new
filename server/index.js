@@ -114,7 +114,7 @@ io.on('connection', (socket) => {
       gender: userData.gender,
       preferredGender: userData.preferredGender || 'all',
       tier: userData.tier || 'free',
-      age: userData.age || 25
+      age: userData.age
     };
     
     activeConnections.set(socket.id, user);
@@ -147,7 +147,7 @@ io.on('connection', (socket) => {
         partnerInfo: {
           name: match.username,
           gender: match.gender,
-          age: match.age || 25
+          age: match.age
         }
       });
       
@@ -156,7 +156,7 @@ io.on('connection', (socket) => {
         partnerInfo: {
           name: user.username,
           gender: user.gender,
-          age: user.age || 25
+          age: user.age
         }
       });
     } else {

@@ -14,6 +14,7 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [age, setAge] = useState('18');
   const [gender, setGender] = useState<'male' | 'female' | 'other'>('male');
   const [error, setError] = useState('');
   const { signup } = useAuth();
@@ -22,8 +23,14 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
     e.preventDefault();
     setError('');
     
-    if (!email || !password || !username) {
+    if (!email || !password || !username || !age) {
       setError('Please fill in all fields');
+      return;
+    }
+
+    const ageNum = parseInt(age);
+    if (isNaN(ageNum) || ageNum < 18) {
+      setError('You must be at least 18 years old');
       return;
     }
 
@@ -33,7 +40,7 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
     }
 
     try {
-      const success = await signup(email, password, username, gender);
+      const success = await signup(email, password, username, gender, ageNum);
       if (!success) {
         setError('Signup failed. Please try again.');
       }
@@ -97,6 +104,20 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
                 onChange={(e) => setPassword(e.target.value)}
                 className="bg-black/50 border-yellow-600/30 text-white placeholder:text-yellow-200/30 focus:border-yellow-500 h-10 sm:h-11 text-sm sm:text-base"
                 placeholder="••••••••"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="age" className="text-yellow-200 text-sm sm:text-base">Age</Label>
+              <Input
+                id="age"
+                type="number"
+                min="18"
+                max="100"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                className="bg-black/50 border-yellow-600/30 text-white placeholder:text-yellow-200/30 focus:border-yellow-500 h-10 sm:h-11 text-sm sm:text-base"
+                placeholder="Your age"
               />
             </div>
 
