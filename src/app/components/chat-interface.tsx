@@ -521,10 +521,10 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
       <AnimatePresence>
         {!isSearching && (
            <motion.div 
-             initial={{ x: -50, opacity: 0 }}
+             initial={{ x: -20, opacity: 0 }}
              animate={{ x: 0, opacity: 1 }}
-             exit={{ x: -50, opacity: 0 }}
-             className="absolute top-20 left-6 z-40 bg-black/30 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl flex flex-col gap-1 shadow-2xl"
+             exit={{ x: -20, opacity: 0 }}
+             className="absolute bottom-28 left-6 sm:bottom-auto sm:top-20 sm:left-6 z-40 bg-black/30 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl flex flex-row sm:flex-col gap-1 shadow-2xl transition-all"
            >
              {(['all', 'male', 'female', 'other'] as const).map((g) => (
                 <button
