@@ -365,6 +365,7 @@ export function ChatInterface({ socket, onExit, preferredGender, chatMode }: Cha
       {/* ===============================
           🏷️ Partner Info Overlay
       =============================== */}
+      {!isSearching && partnerInfo && (
         <div className="absolute top-6 left-6 z-40 flex flex-col gap-2">
           <div className="flex items-center gap-2 px-4 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-full shadow-2xl">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -383,6 +384,7 @@ export function ChatInterface({ socket, onExit, preferredGender, chatMode }: Cha
              </span>
           </div>
         </div>
+      )}
 
       {/* ===============================
           🎥 Local Video (mini overlay) - Only in video mode
