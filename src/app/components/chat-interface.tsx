@@ -400,55 +400,57 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
       {/* ===============================
           💬 Text Chat Interface
       =============================== */}
-      <div className={`absolute bottom-32 left-1/2 -translate-x-1/2 w-full max-w-lg z-40 px-4 transition-all ${isSearching ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
-        <div className="bg-black/40 backdrop-blur-2xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl h-[400px] flex flex-col">
-          {/* Messages List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
-            {messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center p-8">
-                <p className="text-sm text-zinc-500 italic">Say hello to your partner!</p>
-              </div>
-            ) : (
-              messages.map((m, i) => (
-                <div key={i} className={`flex flex-col ${m.sender === 'me' ? 'items-end' : 'items-start'}`}>
-                   <div className={`max-w-[80%] px-4 py-2 rounded-2xl text-sm ${
-                     m.sender === 'me' 
-                       ? 'bg-yellow-500 text-black font-medium' 
-                       : 'bg-white/10 text-white'
-                   }`}>
-                     {m.text}
-                   </div>
-                   <span className="text-[10px] text-zinc-600 mt-1 uppercase font-bold tracking-tighter">
-                     {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                   </span>
+      {chatMode === 'text' && (
+        <div className={`absolute bottom-32 left-1/2 -translate-x-1/2 w-full max-w-lg z-40 px-4 transition-all ${isSearching ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
+          <div className="bg-black/40 backdrop-blur-2xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl h-[400px] flex flex-col">
+            {/* Messages List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
+              {messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                  <p className="text-sm text-zinc-500 italic">Say hello to your partner!</p>
                 </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+              ) : (
+                messages.map((m, i) => (
+                  <div key={i} className={`flex flex-col ${m.sender === 'me' ? 'items-end' : 'items-start'}`}>
+                     <div className={`max-w-[80%] px-4 py-2 rounded-2xl text-sm ${
+                       m.sender === 'me' 
+                         ? 'bg-yellow-500 text-black font-medium' 
+                         : 'bg-white/10 text-white'
+                     }`}>
+                       {m.text}
+                     </div>
+                     <span className="text-[10px] text-zinc-600 mt-1 uppercase font-bold tracking-tighter">
+                       {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                     </span>
+                  </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
 
-          {/* Input Area */}
-          <div className="p-4 bg-white/5 border-t border-white/10">
-            <div className="relative flex items-center">
-              <input 
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder="Type a message..."
-                className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-yellow-500/50 transition-all pr-12"
-              />
-              <button 
-                onClick={sendMessage}
-                disabled={!inputText.trim()}
-                className="absolute right-2 p-2 rounded-xl bg-yellow-500 text-black hover:bg-yellow-400 disabled:opacity-50 disabled:hover:bg-yellow-500 transition-all font-bold"
-              >
-                <ChevronRight size={18} />
-              </button>
+            {/* Input Area */}
+            <div className="p-4 bg-white/5 border-t border-white/10">
+              <div className="relative flex items-center">
+                <input 
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                  placeholder="Type a message..."
+                  className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-yellow-500/50 transition-all pr-12"
+                />
+                <button 
+                  onClick={sendMessage}
+                  disabled={!inputText.trim()}
+                  className="absolute right-2 p-2 rounded-xl bg-yellow-500 text-black hover:bg-yellow-400 disabled:opacity-50 disabled:hover:bg-yellow-500 transition-all font-bold"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ===============================
           🎛 Controls (Unified Premium Bar)
@@ -461,21 +463,25 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
             exit={{ y: 50, opacity: 0 }}
             className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 p-3 bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full shadow-2xl scale-110 sm:scale-100"
           >
-            <ControlButton 
-              onClick={() => setIsVideoEnabled(v => !v)}
-              active={isVideoEnabled}
-              icon={isVideoEnabled ? <Camera size={20} /> : <CameraOff size={20} />}
-              label={isVideoEnabled ? "Camera Off" : "Camera On"}
-            />
+            {chatMode === 'video' && (
+              <>
+                <ControlButton 
+                  onClick={() => setIsVideoEnabled(v => !v)}
+                  active={isVideoEnabled}
+                  icon={isVideoEnabled ? <Camera size={20} /> : <CameraOff size={20} />}
+                  label={isVideoEnabled ? "Camera Off" : "Camera On"}
+                />
 
-            <ControlButton 
-              onClick={() => setIsAudioEnabled(a => !a)}
-              active={isAudioEnabled}
-              icon={isAudioEnabled ? <Mic size={20} /> : <MicOff size={20} />}
-              label={isAudioEnabled ? "Mute" : "Unmute"}
-            />
+                <ControlButton 
+                  onClick={() => setIsAudioEnabled(a => !a)}
+                  active={isAudioEnabled}
+                  icon={isAudioEnabled ? <Mic size={20} /> : <MicOff size={20} />}
+                  label={isAudioEnabled ? "Mute" : "Unmute"}
+                />
 
-            <div className="w-[1px] h-8 bg-white/10 mx-1" />
+                <div className="w-[1px] h-8 bg-white/10 mx-1" />
+              </>
+            )}
 
             <ControlButton 
               onClick={handleSkip}
@@ -484,11 +490,13 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
               label="Skip"
             />
 
-            <ControlButton 
-              onClick={() => setIsUserViewMain(v => !v)}
-              icon={<Maximize2 size={20} />}
-              label="Swap View"
-            />
+            {chatMode === 'video' && (
+              <ControlButton 
+                onClick={() => setIsUserViewMain(v => !v)}
+                icon={<Maximize2 size={20} />}
+                label="Swap View"
+              />
+            )}
 
             <div className="w-[1px] h-8 bg-white/10 mx-1" />
 
