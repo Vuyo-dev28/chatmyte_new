@@ -395,7 +395,6 @@ function AppContent() {
       socket={socket} 
       onExit={() => setCurrentView('dashboard')} 
       preferredGender={preferredGender}
-      setPreferredGender={setPreferredGender}
       chatMode={chatMode}
     />
   );

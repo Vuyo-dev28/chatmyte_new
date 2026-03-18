@@ -21,11 +21,10 @@ interface ChatInterfaceProps {
   socket: Socket;
   onExit: () => void;
   preferredGender: 'all' | 'male' | 'female' | 'other';
-  setPreferredGender: (gender: 'all' | 'male' | 'female' | 'other') => void;
   chatMode: 'video' | 'text';
 }
 
-export function ChatInterface({ socket, onExit, preferredGender, setPreferredGender, chatMode }: ChatInterfaceProps) {
+export function ChatInterface({ socket, onExit, preferredGender, chatMode }: ChatInterfaceProps) {
   const { user } = useAuth();
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(true);
@@ -276,7 +275,12 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
         <div className="absolute inset-0 flex items-center justify-center bg-black z-50 text-white text-xl flex-col gap-4">
           <div className="flex flex-col items-center gap-2">
             <div className="animate-pulse">
-              {partnerId ? "Connecting to partner..." : `Searching for ${currentSearchGender === 'all' ? 'anyone' : currentSearchGender + 's'}...`}
+              {partnerId ? "Connecting to partner..." : `Searching for ${
+                preferredGender === 'all' ? 'Anyone' : 
+                preferredGender === 'female' ? 'Girls Only' : 
+                preferredGender === 'male' ? 'Boys Only' : 
+                preferredGender + 's'
+              }...`}
             </div>
             {isFallbackActive && (
               <motion.div 
@@ -361,16 +365,24 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
       {/* ===============================
           🏷️ Partner Info Overlay
       =============================== */}
-      {!isSearching && partnerInfo && (
-        <div className="absolute top-6 left-6 z-40 flex flex-col gap-1">
+        <div className="absolute top-6 left-6 z-40 flex flex-col gap-2">
           <div className="flex items-center gap-2 px-4 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-full shadow-2xl">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             <span className="text-white font-medium text-sm sm:text-base">
               {partnerInfo.name}, {partnerInfo.age}
             </span>
           </div>
+          <div className="px-3 py-1 bg-yellow-500/10 backdrop-blur-md border border-yellow-500/20 rounded-full inline-flex self-start">
+             <span className="text-yellow-500/80 text-[10px] uppercase font-bold tracking-widest leading-none">
+               Connected to {
+                 preferredGender === 'all' ? 'Everyone' : 
+                 preferredGender === 'female' ? 'Girls Only' : 
+                 preferredGender === 'male' ? 'Boys Only' : 
+                 preferredGender
+               }
+             </span>
+          </div>
         </div>
-      )}
 
       {/* ===============================
           🎥 Local Video (mini overlay) - Only in video mode
@@ -515,39 +527,6 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
         )}
       </AnimatePresence>
 
-      {/* ===============================
-          🏷️ Gender Filter (Floating)
-      =============================== */}
-      <AnimatePresence>
-        {!isSearching && (
-           <motion.div 
-             initial={{ x: -20, opacity: 0 }}
-             animate={{ x: 0, opacity: 1 }}
-             exit={{ x: -20, opacity: 0 }}
-             className="absolute bottom-28 left-6 sm:bottom-auto sm:top-20 sm:left-6 z-40 bg-black/30 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl flex flex-row sm:flex-col gap-1 shadow-2xl transition-all"
-           >
-             {(['all', 'male', 'female', 'other'] as const).map((g) => (
-                <button
-                  key={g}
-                  onClick={() => {
-                    if (user?.tier !== 'premium' && g !== 'all') {
-                      return; // Modal already handled in dashboard or just silent block
-                    }
-                    setPreferredGender(g);
-                  }}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                    preferredGender === g 
-                      ? "bg-yellow-500 text-black shadow-lg shadow-yellow-500/20" 
-                      : "text-zinc-500 hover:text-white hover:bg-white/5"
-                  } ${user?.tier !== 'premium' && g !== 'all' ? 'opacity-20 cursor-not-allowed' : ''}`}
-                  title={g === 'all' ? 'All Genders' : g.charAt(0).toUpperCase() + g.slice(1)}
-                >
-                  {g === 'all' ? <Users size={18} /> : g.charAt(0).toUpperCase()}
-                </button>
-             ))}
-           </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
