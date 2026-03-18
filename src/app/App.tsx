@@ -18,6 +18,7 @@ function AppContent() {
   const [processingSubscription, setProcessingSubscription] = useState(false);
   const [currentView, setCurrentView] = useState<'dashboard' | 'chat' | 'admin'>('dashboard');
   const [preferredGender, setPreferredGender] = useState<'all' | 'male' | 'female' | 'other'>('all');
+  const [chatMode, setChatMode] = useState<'video' | 'text'>('video');
   const { socket, isConnected } = useSocket();
   // Use singleton instance
 
@@ -384,6 +385,8 @@ function AppContent() {
       onStartChat={() => setCurrentView('chat')} 
       preferredGender={preferredGender}
       setPreferredGender={setPreferredGender}
+      chatMode={chatMode}
+      setChatMode={setChatMode}
       onOpenAdmin={() => setCurrentView('admin')}
     />
   ) : (
@@ -392,6 +395,7 @@ function AppContent() {
       onExit={() => setCurrentView('dashboard')} 
       preferredGender={preferredGender}
       setPreferredGender={setPreferredGender}
+      chatMode={chatMode}
     />
   );
 }

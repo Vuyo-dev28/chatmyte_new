@@ -3,11 +3,11 @@ import { useAuth } from './auth-context';
 import { PremiumModal } from './premium-modal';
 import { ProfileModal } from './profile-modal';
 import { Button } from './ui/button';
-import { 
-  LogOut, 
-  Video, 
-  Settings, 
-  User as UserIcon, 
+import {
+  LogOut,
+  Video,
+  Settings,
+  User as UserIcon,
   ShieldCheck,
   MessageSquare,
   Users,
@@ -22,9 +22,18 @@ interface DashboardProps {
   preferredGender: 'all' | 'male' | 'female' | 'other';
   setPreferredGender: (gender: 'all' | 'male' | 'female' | 'other') => void;
   onOpenAdmin: () => void;
+  chatMode: 'video' | 'text';
+  setChatMode: (mode: 'video' | 'text') => void;
 }
 
-export function Dashboard({ onStartChat, preferredGender, setPreferredGender, onOpenAdmin }: DashboardProps) {
+export function Dashboard({
+  onStartChat,
+  preferredGender,
+  setPreferredGender,
+  onOpenAdmin,
+  chatMode,
+  setChatMode
+}: DashboardProps) {
   const { user, logout } = useAuth();
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -55,7 +64,7 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
           </div>
 
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={() => setIsPremiumModalOpen(true)}
               className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-yellow-600/30 bg-yellow-600/10 text-yellow-300 text-sm hover:bg-yellow-600/20 transition-all font-medium"
             >
@@ -65,7 +74,7 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
 
             {/* --- User Menu Dropdown --- */}
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                 className="flex items-center gap-2 p-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
               >
@@ -79,12 +88,12 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
                 {isUserMenuOpen && (
                   <>
                     {/* Backdrop for closing */}
-                    <div 
-                      className="fixed inset-0 z-10" 
-                      onClick={() => setIsUserMenuOpen(false)} 
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setIsUserMenuOpen(false)}
                     />
-                    
-                    <motion.div 
+
+                    <motion.div
                       initial={{ opacity: 0, y: 10, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -94,26 +103,26 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
                         <p className="text-sm font-bold text-white">{user.username}</p>
                         <p className="text-xs text-zinc-500 truncate">{user.email}</p>
                       </div>
-                      
+
                       <div className="p-2">
-                        <button 
+                        <button
                           onClick={() => openProfile('profile')}
                           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
                         >
                           <Settings className="w-4 h-4" />
                           Edit Profile
                         </button>
-                        
-                        <button 
+
+                        <button
                           onClick={() => openProfile('subscription')}
                           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
                         >
                           <Crown className="w-4 h-4 text-yellow-500" />
                           Manage Subscription
                         </button>
-                        
+
                         {isAdmin && (
-                          <button 
+                          <button
                             onClick={onOpenAdmin}
                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-yellow-500 hover:bg-yellow-500/5 transition-colors"
                           >
@@ -121,9 +130,9 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
                             Admin Dashboard
                           </button>
                         )}
-                        
+
                         {user.tier !== 'premium' && (
-                          <button 
+                          <button
                             onClick={() => {
                               setIsPremiumModalOpen(true);
                               setIsUserMenuOpen(false);
@@ -136,8 +145,8 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
                         )}
 
                         <div className="h-px bg-white/5 my-2" />
-                        
-                        <button 
+
+                        <button
                           onClick={logout}
                           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-400/5 transition-colors text-left"
                         >
@@ -156,7 +165,7 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
+
           {/* --- Left Column: Profile & Stats --- */}
           <div className="hidden lg:block lg:col-span-1 space-y-6">
             <div className="p-6 rounded-2xl border border-yellow-600/20 bg-gradient-to-b from-yellow-900/10 to-transparent backdrop-blur-sm">
@@ -178,7 +187,7 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
                   </div>
                   <span className="text-sm font-medium text-yellow-300 capitalize">{user.gender || 'Not set'}</span>
                 </div>
-                
+
                 <div className="flex items-center justify-between p-3 rounded-xl bg-white/5">
                   <div className="flex items-center gap-3">
                     <ShieldCheck className="w-4 h-4 text-yellow-400" />
@@ -190,7 +199,7 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
                 </div>
               </div>
 
-              <Button 
+              <Button
                 variant="outline"
                 onClick={() => openProfile('profile')}
                 className="w-full mt-6 border-yellow-600/20 bg-white/5 text-yellow-200 hover:bg-white/10"
@@ -206,24 +215,50 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
             <div className="relative p-8 sm:p-12 rounded-3xl border border-yellow-600/30 overflow-hidden group">
               {/* Background Glow */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-yellow-500/10 blur-[100px] pointer-events-none group-hover:bg-yellow-500/15 transition-all duration-700" />
-              
+
               <div className="relative z-10 flex flex-col items-center text-center">
                 <div className="w-20 h-20 bg-yellow-400 rounded-2xl flex items-center justify-center mb-6 rotate-3 group-hover:rotate-6 transition-transform shadow-2xl shadow-yellow-500/40">
                   <MessageSquare className="w-10 h-10 text-black" />
                 </div>
-                
+
                 <h1 className="text-3xl sm:text-4xl font-black mb-4 bg-gradient-to-r from-white to-yellow-200 bg-clip-text text-transparent italic">
                   READY TO CONNECT?
                 </h1>
-                
+
+                {/* --- Chat Mode Selection --- */}
+                <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 mb-6 w-full max-w-sm">
+                  <button
+                    onClick={() => setChatMode('video')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all ${chatMode === 'video'
+                        ? 'bg-yellow-500 text-black font-bold shadow-lg'
+                        : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                      }`}
+                  >
+                    <Video className="w-4 h-4" />
+                    <span className="text-sm">Video Chat</span>
+                  </button>
+                  <button
+                    onClick={() => setChatMode('text')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all ${chatMode === 'text'
+                        ? 'bg-yellow-500 text-black font-bold shadow-lg'
+                        : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                      }`}
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    <span className="text-sm">Text Only</span>
+                  </button>
+                </div>
+
                 <p className="text-yellow-100/60 max-w-md mb-8 text-lg">
-                  Meet interesting people from around the world instantly via random video chat.
+                  {chatMode === 'video'
+                    ? 'Meet interesting people from around the world instantly via random video chat.'
+                    : 'Connect with people instantly through anonymous text messaging.'}
                 </p>
 
                 {/* --- Matching Preferences (Dropdown Style) --- */}
                 <div className="w-full max-w-sm mb-8">
                   <div className="relative">
-                    <button 
+                    <button
                       onClick={() => setIsGenderMenuOpen(!isGenderMenuOpen)}
                       className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md hover:bg-white/10 transition-all group"
                     >
@@ -239,7 +274,7 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                         <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-300 ${isGenderMenuOpen ? 'rotate-180' : ''}`} />
+                        <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-300 ${isGenderMenuOpen ? 'rotate-180' : ''}`} />
                       </div>
                     </button>
 
@@ -247,7 +282,7 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
                       {isGenderMenuOpen && (
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setIsGenderMenuOpen(false)} />
-                          <motion.div 
+                          <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
@@ -265,9 +300,8 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
                                   setPreferredGender(g);
                                   setIsGenderMenuOpen(false);
                                 }}
-                                className={`w-full flex items-center justify-between px-4 py-3 text-sm transition-colors ${
-                                  preferredGender === g ? 'bg-yellow-500 text-black font-bold' : 'text-zinc-300 hover:bg-white/5'
-                                }`}
+                                className={`w-full flex items-center justify-between px-4 py-3 text-sm transition-colors ${preferredGender === g ? 'bg-yellow-500 text-black font-bold' : 'text-zinc-300 hover:bg-white/5'
+                                  }`}
                               >
                                 <div className="flex items-center gap-2">
                                   <span className="capitalize">{g === 'all' ? 'Everyone' : g}</span>
@@ -285,13 +319,13 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
                   </div>
                 </div>
 
-                <Button 
+                <Button
                   onClick={onStartChat}
                   className="px-10 h-14 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-bold text-lg rounded-full shadow-xl shadow-yellow-500/20 hover:scale-105 active:scale-95 transition-all w-full max-w-sm"
                 >
                   START CHATTING NOW
                 </Button>
-                
+
                 <p className="mt-6 text-xs text-yellow-200/40 flex items-center gap-2">
                   <ShieldCheck className="w-3 h-3 text-yellow-500/50" />
                   Encrypted & Secure Peer-to-Peer Connection
@@ -314,11 +348,11 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
         </div>
       </main>
 
-      <PremiumModal 
-        isOpen={isPremiumModalOpen} 
-        onClose={() => setIsPremiumModalOpen(false)} 
+      <PremiumModal
+        isOpen={isPremiumModalOpen}
+        onClose={() => setIsPremiumModalOpen(false)}
       />
-      
+
       <ProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}

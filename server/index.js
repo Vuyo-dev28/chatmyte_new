@@ -174,10 +174,10 @@ function findMatch(user) {
     ? [waitingQueue[user.preferredGender], waitingQueue.all]
     : [waitingQueue.all, waitingQueue.male, waitingQueue.female, waitingQueue.other];
   
-  // Flatten and filter out the current user
+  // Flatten and filter out the current user, ensuring same chatMode
   const allWaitingUsers = queuesToCheck
     .flat()
-    .filter(u => u && u.socketId !== user.socketId);
+    .filter(u => u && u.socketId !== user.socketId && u.chatMode === user.chatMode);
   
   // Find a match (first available user)
   const match = allWaitingUsers.find(u => {
@@ -385,6 +385,7 @@ io.on('connection', async (socket) => {
       age: userData.age,
       is_admin: socket.is_admin,
       country: geo.country,
+      chatMode: userData.chatMode || 'video',
       connectedAt: new Date().toISOString()
     };
     
@@ -481,6 +482,21 @@ io.on('connection', async (socket) => {
       io.to(targetId).emit('ice-candidate', {
         candidate,
         fromId: socket.id
+      });
+    }
+  });
+
+  // Text Chat Messaging
+  socket.on('send-message', (data) => {
+    const { message, to } = data;
+    const user = activeConnections.get(socket.id);
+    
+    if (user && user.partnerId === to) {
+      console.log(`[Chat] Message from ${socket.id} to ${to}: ${message}`);
+      io.to(to).emit('receive-message', {
+        message,
+        fromId: socket.id,
+        timestamp: new Date().toISOString()
       });
     }
   });
