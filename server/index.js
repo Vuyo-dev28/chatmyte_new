@@ -174,10 +174,10 @@ function findMatch(user) {
     ? [waitingQueue[user.preferredGender], waitingQueue.all]
     : [waitingQueue.all, waitingQueue.male, waitingQueue.female, waitingQueue.other];
   
-  // Flatten and filter out the current user, ensuring same chatMode
+  // Flatten and filter out the current user
   const allWaitingUsers = queuesToCheck
     .flat()
-    .filter(u => u && u.socketId !== user.socketId && u.chatMode === user.chatMode);
+    .filter(u => u && u.socketId !== user.socketId);
   
   // Find a match (first available user)
   const match = allWaitingUsers.find(u => {
@@ -190,6 +190,9 @@ function findMatch(user) {
     if (user.preferredGender && user.preferredGender !== 'all' && user.tier === 'premium') {
       if (u.gender !== user.preferredGender) return false;
     }
+
+    // 📱 Chat Mode matching (Video vs Text Only)
+    if (u.chatMode !== user.chatMode) return false;
 
     // If the match has a preference, check if user meets it
     if (u.preferredGender && u.preferredGender !== 'all' && u.tier === 'premium') {
@@ -364,63 +367,51 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('join-queue', async (userData) => {
-    console.log('User joining queue:', socket.id, userData);
+    console.log(`[Queue] User ${socket.id} joined with mode: ${userData.chatMode || 'video'}`);
     
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', userData.userId)
-      .single();
-
     socket.userId = userData.userId;
-    socket.is_admin = !!profile?.is_admin;
 
     const user = {
       socketId: socket.id,
       userId: userData.userId,
       username: userData.username,
       gender: userData.gender,
-      preferredGender: userData.preferredGender || 'all',
       tier: userData.tier || 'free',
       age: userData.age,
-      is_admin: socket.is_admin,
-      country: geo.country,
+      preferredGender: userData.preferredGender || 'all',
       chatMode: userData.chatMode || 'video',
+      country: geo.country,
+      lastPartnerId: socket.lastPartnerId,
+      is_admin: userData.is_admin,
       connectedAt: new Date().toISOString()
     };
     
     activeConnections.set(socket.id, user);
     broadcastStats();
     
-    // Try to find a match BEFORE adding to queue
     const match = findMatch(user);
-    
     if (match) {
       console.log('Match found!', socket.id, 'matched with', match.socketId);
       
-      // Found a match!
       const matchUser = activeConnections.get(match.socketId);
-      
       if (!matchUser) {
-        console.error('Match user not found in activeConnections');
         addToQueue(user);
         socket.emit('waiting');
         return;
       }
       
-      // Update both users with partner info
       user.partnerId = match.socketId;
       matchUser.partnerId = socket.id;
       activeConnections.set(socket.id, user);
       activeConnections.set(match.socketId, matchUser);
       
-      // Notify both users
       socket.emit('matched', {
         partnerId: match.socketId,
         partnerInfo: {
           name: match.username,
           gender: match.gender,
-          age: match.age || 18
+          age: match.age || 18,
+          chatMode: match.chatMode
         }
       });
       
@@ -429,15 +420,26 @@ io.on('connection', async (socket) => {
         partnerInfo: {
           name: user.username,
           gender: user.gender,
-          age: user.age || 18
+          age: user.age || 18,
+          chatMode: user.chatMode
         }
       });
     } else {
-      // No match found, add to queue
-      console.log('No match found, adding to queue:', socket.id);
       addToQueue(user);
       socket.emit('waiting');
     }
+  });
+
+  // 💬 Chat Messaging relay
+  socket.on('chat:message', ({ text, targetId }) => {
+    const user = activeConnections.get(socket.id);
+    if (!user || !targetId) return;
+
+    io.to(targetId).emit('chat:message', {
+      text,
+      senderId: socket.id,
+      timestamp: Date.now()
+    });
   });
 
   // WebRTC signaling
@@ -482,21 +484,6 @@ io.on('connection', async (socket) => {
       io.to(targetId).emit('ice-candidate', {
         candidate,
         fromId: socket.id
-      });
-    }
-  });
-
-  // Text Chat Messaging
-  socket.on('send-message', (data) => {
-    const { message, to } = data;
-    const user = activeConnections.get(socket.id);
-    
-    if (user && user.partnerId === to) {
-      console.log(`[Chat] Message from ${socket.id} to ${to}: ${message}`);
-      io.to(to).emit('receive-message', {
-        message,
-        fromId: socket.id,
-        timestamp: new Date().toISOString()
       });
     }
   });

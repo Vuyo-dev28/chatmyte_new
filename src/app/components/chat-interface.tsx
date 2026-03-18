@@ -12,8 +12,8 @@ import {
   MonitorPlay,
   Maximize2,
   Users,
-  MessageSquare,
-  ChevronRight
+  ChevronRight,
+  MessageSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -22,10 +22,10 @@ interface ChatInterfaceProps {
   onExit: () => void;
   preferredGender: 'all' | 'male' | 'female' | 'other';
   setPreferredGender: (gender: 'all' | 'male' | 'female' | 'other') => void;
-  chatMode?: 'video' | 'text';
+  chatMode: 'video' | 'text';
 }
 
-export function ChatInterface({ socket, onExit, preferredGender, setPreferredGender, chatMode = 'video' }: ChatInterfaceProps) {
+export function ChatInterface({ socket, onExit, preferredGender, setPreferredGender, chatMode }: ChatInterfaceProps) {
   const { user } = useAuth();
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(true);
@@ -36,7 +36,7 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
   const [partnerInfo, setPartnerInfo] = useState<{ name: string; age: number } | null>(null);
   const [currentSearchGender, setCurrentSearchGender] = useState(preferredGender);
   const [isFallbackActive, setIsFallbackActive] = useState(false);
-  const [messages, setMessages] = useState<Array<{ text: string, sender: 'me' | 'partner', timestamp: string }>>([]);
+  const [messages, setMessages] = useState<{ sender: 'me' | 'partner'; text: string; time: number }[]>([]);
   const [inputText, setInputText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -58,7 +58,7 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
     remoteVideoRef,
     isVideoEnabled,
     isAudioEnabled,
-    partnerId
+    partnerId: chatMode === 'video' ? partnerId : null // Only init WebRTC in video mode
   });
 
   // ===============================
@@ -78,7 +78,7 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
       preferredGender: currentSearchGender,
       chatMode: chatMode
     });
-  }, [socket, user, currentSearchGender]);
+  }, [socket, user, currentSearchGender, chatMode]);
 
   // ===============================
   // 🔄 Queue Management
@@ -88,7 +88,7 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
     closePeerConnection(); // Keep media, only close peer connection
     setPartnerId(null);
     setPartnerInfo(null);
-    setMessages([]); // Clear messages on new partner
+    setMessages([]); // Clear chat history
     setRemoteAspectRatio('landscape'); // Reset UI state
     setIsSearching(true);
     
@@ -141,18 +141,10 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
       // deterministic offer creator (lexicographical order)
       if (socket.id && socket.id < data.partnerId) {
         console.log(`📤 [Signaling] I am the offerer (< ${data.partnerId})`);
-        // Only create WebRTC offer if in video mode
-        if (chatMode === 'video') {
-          await createOffer(data.partnerId);
-        }
+        await createOffer(data.partnerId);
       } else {
         console.log(`📥 [Signaling] I am the answerer (>= ${data.partnerId})`);
       }
-    });
-
-    socket.on("receive-message", (data: { message: string, fromId: string, timestamp: string }) => {
-      console.log("📥 [Chat] Message received:", data.message);
-      setMessages(prev => [...prev, { text: data.message, sender: 'partner', timestamp: data.timestamp }]);
     });
 
     socket.on("offer", async ({ offer, fromId }) => {
@@ -173,6 +165,14 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
 
     socket.on("partner-skipped", () => {
       handlePartnerEvent();
+    });
+
+    socket.on("chat:message", (data: { text: string; senderId: string; timestamp: number }) => {
+      setMessages(prev => [...prev, {
+        sender: 'partner',
+        text: data.text,
+        time: data.timestamp
+      }]);
     });
 
     return () => {
@@ -232,6 +232,28 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
     }, 1000);
     return () => clearInterval(interval);
   }, [isSearching, handleLoadedMetadata]);
+  
+  // Auto-scroll to bottom of messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSendMessage = () => {
+    if (!inputText.trim() || !partnerId) return;
+
+    socket.emit('chat:message', {
+      text: inputText,
+      targetId: partnerId
+    });
+
+    setMessages(prev => [...prev, {
+      sender: 'me',
+      text: inputText,
+      time: Date.now()
+    }]);
+
+    setInputText("");
+  };
 
   // ===============================
   // ❌ Exit Chat
@@ -243,26 +265,6 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
     setIsSearching(true);
     onExit();
   }, [cleanup, socket, onExit]);
-
-  const sendMessage = () => {
-    if (!inputText.trim() || !partnerId) return;
-    
-    socket.emit("send-message", { 
-      message: inputText, 
-      to: partnerId 
-    });
-    
-    setMessages(prev => [...prev, { 
-      text: inputText, 
-      sender: 'me', 
-      timestamp: new Date().toISOString() 
-    }]);
-    setInputText("");
-  };
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
 
   return (
     <div className="relative w-full h-screen bg-black flex items-center justify-center">
@@ -316,23 +318,23 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
           🎥 Remote Video (always mounted)
       =============================== */}
       <div className="absolute inset-0 w-full h-full overflow-hidden bg-neutral-950">
-        {/* Blurred Background for Portrait Streams */}
-        {remoteAspectRatio === 'portrait' && !isSearching && (
-          <video
-            ref={(el) => {
-              if (el && remoteVideoRef.current && el.srcObject !== remoteVideoRef.current.srcObject) {
-                el.srcObject = remoteVideoRef.current.srcObject;
-              }
-            }}
-            autoPlay
-            muted
-            playsInline
-            className="absolute inset-0 w-full h-full object-cover scale-110 blur-3xl opacity-40 brightness-50"
-          />
-        )}
-        
-        {chatMode === 'video' && (
+        {chatMode === 'video' ? (
           <>
+            {/* Blurred Background for Portrait Streams */}
+            {remoteAspectRatio === 'portrait' && !isSearching && (
+              <video
+                ref={(el) => {
+                  if (el && remoteVideoRef.current && el.srcObject !== remoteVideoRef.current.srcObject) {
+                    el.srcObject = remoteVideoRef.current.srcObject;
+                  }
+                }}
+                autoPlay
+                muted
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover scale-110 blur-3xl opacity-40 brightness-50"
+              />
+            )}
+            
             <video
               ref={remoteVideoRef}
               autoPlay
@@ -344,15 +346,14 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
               } ${remoteAspectRatio === 'portrait' ? 'object-contain' : 'object-cover'}`}
             />
           </>
-        )}
-        {chatMode === 'text' && !isSearching && (
-          <div className="absolute inset-0 flex items-center justify-center">
-             <div className="text-zinc-500 flex flex-col items-center gap-4">
-               <div className="w-16 h-16 rounded-full bg-zinc-900 border border-white/5 flex items-center justify-center">
-                 <MessageSquare className="w-8 h-8 opacity-20" />
-               </div>
-               <p className="text-sm font-medium opacity-40">Connected for Text Chat</p>
-             </div>
+        ) : (
+          /* Text Mode Background */
+          <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-black to-zinc-900 flex items-center justify-center">
+            {!isSearching && (
+              <div className="text-zinc-800 text-9xl font-black italic select-none opacity-20 transform -rotate-12">
+                CHATMYTE
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -372,7 +373,7 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
       )}
 
       {/* ===============================
-          🎥 Local Video (mini overlay)
+          🎥 Local Video (mini overlay) - Only in video mode
       =============================== */}
       {chatMode === 'video' && (
         <div 
@@ -398,55 +399,63 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
       )}
 
       {/* ===============================
-          💬 Text Chat Interface
+          💬 Text Chat UI - Only in text mode
       =============================== */}
-      {chatMode === 'text' && (
-        <div className={`absolute bottom-32 left-1/2 -translate-x-1/2 w-full max-w-lg z-40 px-4 transition-all ${isSearching ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
-          <div className="bg-black/40 backdrop-blur-2xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl h-[400px] flex flex-col">
-            {/* Messages List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
-              {messages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-8">
-                  <p className="text-sm text-zinc-500 italic">Say hello to your partner!</p>
-                </div>
-              ) : (
-                messages.map((m, i) => (
-                  <div key={i} className={`flex flex-col ${m.sender === 'me' ? 'items-end' : 'items-start'}`}>
-                     <div className={`max-w-[80%] px-4 py-2 rounded-2xl text-sm ${
-                       m.sender === 'me' 
-                         ? 'bg-yellow-500 text-black font-medium' 
-                         : 'bg-white/10 text-white'
-                     }`}>
-                       {m.text}
-                     </div>
-                     <span className="text-[10px] text-zinc-600 mt-1 uppercase font-bold tracking-tighter">
-                       {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                     </span>
-                  </div>
-                ))
-              )}
-              <div ref={messagesEndRef} />
+      {chatMode === 'text' && !isSearching && (
+        <div className="absolute inset-0 flex flex-col pt-24 pb-32 px-6 sm:px-12 max-w-4xl mx-auto z-30">
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto space-y-4 pr-4 scrollbar-hide mb-6">
+            <div className="text-center text-xs text-zinc-500 font-bold uppercase tracking-widest py-4 border-b border-white/5">
+              Secure Text Connection Established
             </div>
-
-            {/* Input Area */}
-            <div className="p-4 bg-white/5 border-t border-white/10">
-              <div className="relative flex items-center">
-                <input 
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                  placeholder="Type a message..."
-                  className="w-full bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-yellow-500/50 transition-all pr-12"
-                />
-                <button 
-                  onClick={sendMessage}
-                  disabled={!inputText.trim()}
-                  className="absolute right-2 p-2 rounded-xl bg-yellow-500 text-black hover:bg-yellow-400 disabled:opacity-50 disabled:hover:bg-yellow-500 transition-all font-bold"
-                >
-                  <ChevronRight size={18} />
-                </button>
+            
+            {messages.length === 0 && (
+              <div className="text-center text-zinc-600 italic py-20 text-sm">
+                Say something to start the conversation...
               </div>
+            )}
+
+            {messages.map((msg, i) => (
+              <motion.div
+                initial={{ opacity: 0, x: msg.sender === 'me' ? 20 : -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                key={i}
+                className={`flex flex-col ${msg.sender === 'me' ? 'items-end' : 'items-start'}`}
+              >
+                <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm ${
+                  msg.sender === 'me' 
+                    ? 'bg-yellow-500 text-black font-medium rounded-tr-none shadow-lg shadow-yellow-500/10' 
+                    : 'bg-white/10 text-white rounded-tl-none border border-white/5'
+                }`}>
+                  {msg.text}
+                </div>
+                <span className="text-[10px] text-zinc-600 mt-1 px-1">
+                  {new Date(msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </motion.div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Area */}
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-2xl blur opacity-20 group-focus-within:opacity-40 transition-opacity" />
+            <div className="relative flex items-center bg-zinc-900 border border-white/10 rounded-2xl p-2 pl-4">
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                placeholder="Type a message..."
+                className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder:text-zinc-600 text-sm"
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!inputText.trim()}
+                className="ml-2 w-10 h-10 rounded-xl bg-yellow-500 text-black flex items-center justify-center hover:scale-105 active:scale-95 disabled:grayscale disabled:opacity-50 transition-all font-bold"
+              >
+                <ChevronRight size={20} />
+              </button>
             </div>
           </div>
         </div>
@@ -463,25 +472,21 @@ export function ChatInterface({ socket, onExit, preferredGender, setPreferredGen
             exit={{ y: 50, opacity: 0 }}
             className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 p-3 bg-black/30 backdrop-blur-2xl border border-white/10 rounded-full shadow-2xl scale-110 sm:scale-100"
           >
-            {chatMode === 'video' && (
-              <>
-                <ControlButton 
-                  onClick={() => setIsVideoEnabled(v => !v)}
-                  active={isVideoEnabled}
-                  icon={isVideoEnabled ? <Camera size={20} /> : <CameraOff size={20} />}
-                  label={isVideoEnabled ? "Camera Off" : "Camera On"}
-                />
+            <ControlButton 
+              onClick={() => setIsVideoEnabled(v => !v)}
+              active={isVideoEnabled}
+              icon={isVideoEnabled ? <Camera size={20} /> : <CameraOff size={20} />}
+              label={isVideoEnabled ? "Camera Off" : "Camera On"}
+            />
 
-                <ControlButton 
-                  onClick={() => setIsAudioEnabled(a => !a)}
-                  active={isAudioEnabled}
-                  icon={isAudioEnabled ? <Mic size={20} /> : <MicOff size={20} />}
-                  label={isAudioEnabled ? "Mute" : "Unmute"}
-                />
+            <ControlButton 
+              onClick={() => setIsAudioEnabled(a => !a)}
+              active={isAudioEnabled}
+              icon={isAudioEnabled ? <Mic size={20} /> : <MicOff size={20} />}
+              label={isAudioEnabled ? "Mute" : "Unmute"}
+            />
 
-                <div className="w-[1px] h-8 bg-white/10 mx-1" />
-              </>
-            )}
+            <div className="w-[1px] h-8 bg-white/10 mx-1" />
 
             <ControlButton 
               onClick={handleSkip}

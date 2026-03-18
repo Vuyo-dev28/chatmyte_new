@@ -382,11 +382,12 @@ function AppContent() {
 
   return currentView === 'dashboard' ? (
     <Dashboard 
-      onStartChat={() => setCurrentView('chat')} 
+      onStartChat={(mode) => {
+        setChatMode(mode);
+        setCurrentView('chat');
+      }} 
       preferredGender={preferredGender}
       setPreferredGender={setPreferredGender}
-      chatMode={chatMode}
-      setChatMode={setChatMode}
       onOpenAdmin={() => setCurrentView('admin')}
     />
   ) : (
