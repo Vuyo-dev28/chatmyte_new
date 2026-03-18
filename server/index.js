@@ -85,7 +85,7 @@ async function getGeoLocation(ip) {
 }
 
 // Function to get admin stats
-function getAdminStats() {
+async function getAdminStats() {
   const users = Array.from(activeConnections.values());
   const stats = {
     totalOnline: users.length,
@@ -118,10 +118,14 @@ function getAdminStats() {
     }))
   };
 
-  users.forEach(u => {
-    const country = u.country || 'Unknown';
-    stats.countries[country] = (stats.countries[country] || 0) + 1;
-  });
+  // Fetch historical stats
+  try {
+    const { data: historicalData } = await supabase.rpc('get_historical_stats');
+    stats.historical = historicalData || [];
+  } catch (err) {
+    console.warn('[Admin] Failed to fetch historical stats:', err.message);
+    stats.historical = [];
+  }
 
   return stats;
 }
@@ -197,9 +201,16 @@ io.on('connection', async (socket) => {
   const geo = await getGeoLocation(ip);
   console.log('User connected:', socket.id, 'from', geo.country);
 
+  // Increment daily visitor count
+  try {
+    await supabase.rpc('increment_daily_visitor');
+  } catch (err) {
+    console.error('[Analytics] Failed to increment visitor count:', err.message);
+  }
+
   // Stats broadcast
-    const broadcastStats = () => {
-      const stats = getAdminStats();
+    const broadcastStats = async () => {
+      const stats = await getAdminStats();
       io.to('admin_room').emit('admin:stats-update', stats);
     };
 
@@ -258,27 +269,33 @@ io.on('connection', async (socket) => {
 
     // --- Admin Events ---
     socket.on('admin:join', async (email) => {
-    // Basic email check first as a fast filter
-    if (email === ADMIN_EMAIL) {
-      socket.join('admin_room');
-      socket.emit('admin:stats-update', getAdminStats());
-      return;
-    }
+      // 1. Basic email check for fast filter
+      if (email === ADMIN_EMAIL || email.endsWith('@chatmyte.com')) {
+        socket.join('admin_room');
+        const stats = await getAdminStats();
+        socket.emit('admin:stats-update', stats);
+        return;
+      }
 
-    // fallback to DB check for other admins
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', socket.userId || '') // We need to store userId on socket if possible
-      .single();
-    
-    if (profile?.is_admin) {
-      socket.join('admin_room');
-      socket.emit('admin:stats-update', getAdminStats());
-    }
-  });
+      // 2. Database check for other admins
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('id', socket.userId || '')
+          .single();
 
-  socket.on('admin:toggle-rights', async ({ targetUserId, isAdmin }) => {
+        if (profile?.is_admin) {
+          socket.join('admin_room');
+          const stats = await getAdminStats();
+          socket.emit('admin:stats-update', stats);
+        }
+      } catch (err) {
+        console.error('[Admin] Join error:', err.message);
+      }
+    });
+
+    socket.on('admin:toggle-rights', async ({ targetUserId, isAdmin }) => {
     // Verify caller is an admin
     const callerId = Array.from(activeConnections.values()).find(u => u.socketId === socket.id)?.userId;
     if (!callerId) return;
@@ -645,11 +662,11 @@ io.on('connection', async (socket) => {
       }
     }
     
-    // Remove from queue
     removeFromQueue(socket.id);
     activeConnections.delete(socket.id);
-    const stats = getAdminStats();
-    io.to('admin_room').emit('admin:stats-update', stats);
+    getAdminStats().then(stats => {
+      io.to('admin_room').emit('admin:stats-update', stats);
+    });
     
     console.log('User disconnected:', socket.id);
   });

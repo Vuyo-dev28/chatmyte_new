@@ -58,6 +58,11 @@ interface AdminStats {
   inChat: number;
   countries: Record<string, number>;
   users: AdminUser[];
+  historical: {
+    stat_date: string;
+    visitors: number;
+    signups: number;
+  }[];
 }
 
 interface AdminDashboardProps {
@@ -166,7 +171,6 @@ export function AdminDashboard({ onBack }: AdminDashboardProps) {
           />
         </div>
 
-        {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Gender Distribution */}
           <div className="p-6 rounded-3xl bg-zinc-900/50 border border-white/5 backdrop-blur-xl">
@@ -196,16 +200,52 @@ export function AdminDashboard({ onBack }: AdminDashboardProps) {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="grid grid-cols-3 gap-4 mt-4">
-              {genderData.map((d) => (
-                <div key={d.name} className="flex flex-col items-center">
-                  <span className="text-xs text-zinc-500 font-bold uppercase">{d.name}</span>
-                  <span className="text-xl font-bold">{d.value}</span>
-                </div>
-              ))}
-            </div>
           </div>
 
+          {/* Historical Growth */}
+          <div className="p-6 rounded-3xl bg-zinc-900/50 border border-white/5 backdrop-blur-xl">
+            <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+              <Activity size={20} className="text-zinc-400" />
+              Historical Growth (Daily)
+            </h3>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.historical}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                  <XAxis 
+                    dataKey="stat_date" 
+                    stroke="#71717a" 
+                    fontSize={10} 
+                    tickFormatter={(str) => {
+                      const d = new Date(str);
+                      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                    }}
+                  />
+                  <YAxis stroke="#71717a" fontSize={10} />
+                  <RechartsTooltip 
+                    contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '12px' }}
+                    labelStyle={{ color: '#fff', fontWeight: 'bold' }}
+                  />
+                  <Bar dataKey="visitors" fill="#EAB308" radius={[4, 4, 0, 0]} name="Visitors" />
+                  <Bar dataKey="signups" fill="#3B82F6" radius={[4, 4, 0, 0]} name="Signups" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex justify-center gap-6 mt-4">
+               <div className="flex items-center gap-2">
+                 <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                 <span className="text-xs text-zinc-500 font-bold uppercase">Visitors</span>
+               </div>
+               <div className="flex items-center gap-2">
+                 <div className="w-3 h-3 rounded-full bg-blue-500" />
+                 <span className="text-xs text-zinc-500 font-bold uppercase">Signups</span>
+               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Second Row: Top Locations and Queue */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Top Locations */}
           <div className="p-6 rounded-3xl bg-zinc-900/50 border border-white/5 backdrop-blur-xl">
             <h3 className="text-lg font-bold mb-6 flex items-center gap-2">

@@ -11,6 +11,7 @@ import { PAYPAL_CONFIG } from '../lib/paypal-config';
 import { paypalService } from '../lib/paypal';
 import { supabase } from '../lib/supabase';
 import { useSocket } from './hooks/useSocket';
+import { PayPalScriptProvider } from '@paypal/react-paypal-js';
 
 function AppContent() {
   const { user, loading, refreshUser } = useAuth();
@@ -420,7 +421,13 @@ export default function App() {
   return (
     <HelmetProvider>
       <AuthProvider>
-        <AppContent />
+        <PayPalScriptProvider options={{ 
+          clientId: PAYPAL_CONFIG.clientId,
+          vault: true,
+          intent: 'subscription'
+        }}>
+          <AppContent />
+        </PayPalScriptProvider>
       </AuthProvider>
     </HelmetProvider>
   );
