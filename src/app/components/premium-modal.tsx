@@ -2,11 +2,8 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
 import { useAuth } from './auth-context';
-import { Crown, Check, Loader2, Sparkles } from 'lucide-react';
+import { Crown, Check, Loader2 } from 'lucide-react';
 import { createPayPalSubscription } from '../../lib/subscriptions';
-import { PayPalButtons } from '@paypal/react-paypal-js';
-import { PAYPAL_CONFIG } from '../../lib/paypal-config';
-import { supabase } from '../../lib/supabase';
 
 interface PremiumModalProps {
   isOpen: boolean;
@@ -19,45 +16,32 @@ export function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
   const [error, setError] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<'weekly' | 'monthly'>('weekly');
 
-  const [success, setSuccess] = useState(false);
-
-  const planId = selectedPlan === 'weekly' ? PAYPAL_CONFIG.weeklyPlanId : PAYPAL_CONFIG.monthlyPlanId;
-
-  const handleSuccess = async (subscriptionId: string) => {
+  const handleUpgrade = async () => {
     if (!user) return;
-    
-    setLoading(true);
-    try {
-      // Find the pending subscription or create/update the active one
-      // The backend callback logic is still there as a fallback, 
-      // but here we do it immediately for better UX
-      const { error: updateError } = await supabase
-        .from('subscriptions')
-        .upsert({
-          user_id: user.id,
-          tier: 'premium',
-          status: 'active',
-          payment_provider: 'paypal',
-          payment_provider_subscription_id: subscriptionId,
-          started_at: new Date().toISOString(),
-          // Default expiration if not calculated - mostly handled by server later
-          expires_at: new Date(Date.now() + (selectedPlan === 'weekly' ? 7 : 30) * 24 * 60 * 60 * 1000).toISOString()
-        }, { onConflict: 'user_id, status' });
 
-      if (updateError) throw updateError;
-      
-      setSuccess(true);
-      await refreshUser();
-      
-      // Close modal after showing success for a bit
-      setTimeout(() => {
-        onClose();
-        setSuccess(false);
-      }, 3000);
+    setLoading(true);
+    setError('');
+
+    try {
+      // Get current URL for return/cancel URLs
+      // Use query parameters instead of paths since we don't have routing
+      const baseUrl = window.location.origin;
+      const returnUrl = `${baseUrl}/?subscription=success`;
+      const cancelUrl = `${baseUrl}/?subscription=cancel`;
+
+      // Create PayPal subscription with selected plan
+      const { approvalUrl } = await createPayPalSubscription(
+        user.email,
+        returnUrl,
+        cancelUrl,
+        selectedPlan
+      );
+
+      // Redirect to PayPal approval page
+      window.location.href = approvalUrl;
     } catch (err: any) {
-      console.error('Error activating subscription:', err);
-      setError('Subscription approved but activation failed. Please refresh the page.');
-    } finally {
+      console.error('Error creating subscription:', err);
+      setError(err.message || 'Failed to create subscription. Please try again.');
       setLoading(false);
     }
   };
@@ -173,65 +157,30 @@ export function PremiumModal({ isOpen, onClose }: PremiumModalProps) {
           </div>
         </div>
 
-        <div className="mt-4">
-          {success ? (
-            <div className="flex flex-col items-center justify-center py-6 bg-green-500/10 border border-green-500/20 rounded-2xl animate-in fade-in zoom-in duration-500">
-              <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-green-500/20">
-                <Check className="w-8 h-8 text-black" />
-              </div>
-              <h3 className="text-xl font-bold text-green-400 mb-2">Welcome to Premium!</h3>
-              <p className="text-green-100/70 text-sm text-center px-6">
-                Your subscription has been activated successfully. Enjoy exclusive features!
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <div className="relative min-h-[50px]">
-                {loading && (
-                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-[2px] rounded-xl">
-                     <Loader2 className="w-8 h-8 animate-spin text-yellow-400" />
-                   </div>
-                )}
-                <PayPalButtons
-                  style={{ 
-                    layout: 'vertical',
-                    color: 'gold',
-                    shape: 'rect',
-                    label: 'subscribe',
-                    tagline: false
-                  }}
-                  disabled={loading}
-                  createSubscription={(data, actions) => {
-                    return actions.subscription.create({
-                      plan_id: planId
-                    });
-                  }}
-                  onApprove={async (data) => {
-                    if (data.subscriptionID) {
-                      await handleSuccess(data.subscriptionID);
-                    }
-                  }}
-                  onError={(err) => {
-                    console.error('PayPal Error:', err);
-                    setError('An error occurred with PayPal. Please try again.');
-                  }}
-                  onCancel={() => {
-                    setError('Subscription cancelled.');
-                  }}
-                />
-              </div>
-              
-              <Button
-                onClick={onClose}
-                variant="ghost"
-                className="w-full text-zinc-500 hover:text-white hover:bg-white/5 h-10 text-xs font-bold uppercase tracking-widest"
-              >
-                Maybe Later
-              </Button>
-            </div>
-          )}
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-4">
+          <Button
+            onClick={onClose}
+            variant="outline"
+            className="flex-1 border-yellow-600/60 bg-black/40 text-yellow-100 hover:bg-black/55 h-10 sm:h-11 text-sm sm:text-base"
+          >
+            Maybe Later
+          </Button>
+          <Button
+            onClick={handleUpgrade}
+            disabled={loading}
+            className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-black h-10 sm:h-11 text-sm sm:text-base disabled:opacity-50"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              'Upgrade Now'
+            )}
+          </Button>
           {error && (
-            <p className="text-red-400 text-xs text-center mt-3 animate-bounce">{error}</p>
+            <p className="text-red-400 text-sm text-center mt-2">{error}</p>
           )}
         </div>
       </DialogContent>

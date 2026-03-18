@@ -23,6 +23,46 @@ const supabase = createClient(
   process.env.VITE_SUPABASE_ANON_KEY
 );
 
+// Analytics Tracking State
+let analyticsStats = {
+  daily: { visitors: 0, signups: 0 },
+  weekly: { visitors: 0, signups: 0 },
+  monthly: { visitors: 0, signups: 0 }
+};
+
+// Sync Analytics from DB
+async function syncAnalytics() {
+  try {
+    const { data, error } = await supabase.rpc('get_analytics_stats_v1');
+    if (error) throw error;
+    
+    if (data) {
+      data.forEach(stat => {
+        analyticsStats[stat.period] = {
+          visitors: parseInt(stat.visitors),
+          signups: parseInt(stat.signups)
+        };
+      });
+    }
+  } catch (err) {
+    console.error('[Analytics] Error syncing stats:', err);
+  }
+}
+
+// Sync Signups to DB Snapshot
+async function syncSignupsToDB() {
+  try {
+    await supabase.rpc('sync_signup_stats_v1');
+    await syncAnalytics();
+  } catch (err) {
+    console.error('[Analytics] Error syncing signups to DB:', err);
+  }
+}
+
+// Initial sync and periodic update
+syncSignupsToDB();
+setInterval(syncSignupsToDB, 10 * 60 * 1000); // Every 10 minutes
+
 // Initialize PayPal
 paypalService.initialize({
   clientId: process.env.VITE_PAYPAL_CLIENT_ID,
@@ -85,7 +125,7 @@ async function getGeoLocation(ip) {
 }
 
 // Function to get admin stats
-async function getAdminStats() {
+function getAdminStats() {
   const users = Array.from(activeConnections.values());
   const stats = {
     totalOnline: users.length,
@@ -118,15 +158,12 @@ async function getAdminStats() {
     }))
   };
 
-  // Fetch historical stats
-  try {
-    const { data: historicalData } = await supabase.rpc('get_historical_stats');
-    stats.historical = historicalData || [];
-  } catch (err) {
-    console.warn('[Admin] Failed to fetch historical stats:', err.message);
-    stats.historical = [];
-  }
+  users.forEach(u => {
+    const country = u.country || 'Unknown';
+    stats.countries[country] = (stats.countries[country] || 0) + 1;
+  });
 
+  stats.analytics = analyticsStats;
   return stats;
 }
 
@@ -201,23 +238,28 @@ io.on('connection', async (socket) => {
   const geo = await getGeoLocation(ip);
   console.log('User connected:', socket.id, 'from', geo.country);
 
-  // Increment daily visitor count
-  try {
-    await supabase.rpc('increment_daily_visitor');
-  } catch (err) {
-    console.error('[Analytics] Failed to increment visitor count:', err.message);
-  }
-
   // Stats broadcast
-    const broadcastStats = async () => {
-      const stats = await getAdminStats();
+    const broadcastStats = () => {
+      const stats = getAdminStats();
       io.to('admin_room').emit('admin:stats-update', stats);
     };
 
-    socket.on('identify', (userId) => {
-      console.log(`[Socket] Identifying socket ${socket.id} as user ${userId}`);
-      socket.userId = userId;
-    });
+  // Record visitor in DB (Async, non-blocking)
+  const visitorIp = socket.handshake.address || socket.request.connection.remoteAddress;
+  supabase.rpc('record_visitor_v1', { 
+    p_user_id: null, // Will be updated on identify
+    p_ip_address: visitorIp 
+  }).then(() => syncAnalytics());
+
+  socket.on('identify', async (userId) => {
+    console.log(`[Socket] Identifying socket ${socket.id} as user ${userId}`);
+    socket.userId = userId;
+    // Update visitor record with actual user ID
+    supabase.rpc('record_visitor_v1', { 
+      p_user_id: userId, 
+      p_ip_address: visitorIp 
+    }).then(() => syncAnalytics());
+  });
 
     socket.on('subscription:cancel', async ({ subscriptionId, reason, userId }) => {
       try {
@@ -269,33 +311,27 @@ io.on('connection', async (socket) => {
 
     // --- Admin Events ---
     socket.on('admin:join', async (email) => {
-      // 1. Basic email check for fast filter
-      if (email === ADMIN_EMAIL || email.endsWith('@chatmyte.com')) {
-        socket.join('admin_room');
-        const stats = await getAdminStats();
-        socket.emit('admin:stats-update', stats);
-        return;
-      }
+    // Basic email check first as a fast filter
+    if (email === ADMIN_EMAIL) {
+      socket.join('admin_room');
+      socket.emit('admin:stats-update', getAdminStats());
+      return;
+    }
 
-      // 2. Database check for other admins
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('is_admin')
-          .eq('id', socket.userId || '')
-          .single();
+    // fallback to DB check for other admins
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', socket.userId || '') // We need to store userId on socket if possible
+      .single();
+    
+    if (profile?.is_admin) {
+      socket.join('admin_room');
+      socket.emit('admin:stats-update', getAdminStats());
+    }
+  });
 
-        if (profile?.is_admin) {
-          socket.join('admin_room');
-          const stats = await getAdminStats();
-          socket.emit('admin:stats-update', stats);
-        }
-      } catch (err) {
-        console.error('[Admin] Join error:', err.message);
-      }
-    });
-
-    socket.on('admin:toggle-rights', async ({ targetUserId, isAdmin }) => {
+  socket.on('admin:toggle-rights', async ({ targetUserId, isAdmin }) => {
     // Verify caller is an admin
     const callerId = Array.from(activeConnections.values()).find(u => u.socketId === socket.id)?.userId;
     if (!callerId) return;
@@ -662,11 +698,11 @@ io.on('connection', async (socket) => {
       }
     }
     
+    // Remove from queue
     removeFromQueue(socket.id);
     activeConnections.delete(socket.id);
-    getAdminStats().then(stats => {
-      io.to('admin_room').emit('admin:stats-update', stats);
-    });
+    const stats = getAdminStats();
+    io.to('admin_room').emit('admin:stats-update', stats);
     
     console.log('User disconnected:', socket.id);
   });
