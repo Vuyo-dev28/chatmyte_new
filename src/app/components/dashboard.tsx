@@ -13,9 +13,11 @@ import {
   Users,
   ChevronDown,
   Crown,
-  LayoutDashboard
+  LayoutDashboard,
+  Zap,
+  Play
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 
 interface DashboardProps {
   onStartChat: (mode: 'video' | 'text') => void;
@@ -30,7 +32,6 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profileTab, setProfileTab] = useState<'profile' | 'subscription'>('profile');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isGenderMenuOpen, setIsGenderMenuOpen] = useState(false);
   const [chatMode, setChatMode] = useState<'video' | 'text'>('video');
 
   if (!user) return null;
@@ -44,300 +45,232 @@ export function Dashboard({ onStartChat, preferredGender, setPreferredGender, on
   };
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-yellow-500/30">
-      {/* --- Navigation Bar --- */}
-      <nav className="border-b border-yellow-600/20 bg-black/40 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/chatmyte_logo.png" alt="ChatMyte" className="w-10 h-10 object-contain" />
-            <span className="text-xl font-bold bg-gradient-to-r from-yellow-200 to-yellow-500 bg-clip-text text-transparent">
-              ChatMyte
-            </span>
-          </div>
+    <div className="h-[100dvh] bg-[#5B46F2] bg-gradient-to-br from-[#5B46F2] via-[#4F39CC] to-[#3924A8] text-white selection:bg-yellow-500/30 overflow-hidden flex flex-col">
+      
+      {/* Background Decor */}
+      <div className="absolute inset-0 opacity-10 pointer-events-none select-none overflow-hidden">
+        <div className="absolute top-[20%] left-[10%] w-[30%] h-[30%] bg-white rounded-full blur-[100px]" />
+        <div className="absolute bottom-[20%] right-[10%] w-[30%] h-[30%] bg-yellow-400 rounded-full blur-[100px]" />
+      </div>
 
-          <div className="flex items-center gap-4">
+      {/* --- Navigation Bar --- */}
+      <nav className="h-16 sm:h-20 flex items-center justify-between px-6 sm:px-12 relative z-50 shrink-0">
+        <div className="flex items-center gap-3">
+          <img src="/chatmyte_logo.png" alt="ChatMyte" className="w-10 h-10 object-contain drop-shadow-lg" />
+          <span className="text-2xl font-black italic tracking-tighter uppercase">ChatMyte</span>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setIsPremiumModalOpen(true)}
+            className="hidden sm:flex items-center gap-2 px-6 py-2 rounded-full bg-yellow-400 text-black text-xs font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-yellow-400/20"
+          >
+            <Zap className="w-4 h-4 fill-current" />
+            <span>{user.tier === 'premium' ? 'Premium active' : 'Go Premium'}</span>
+          </button>
+
+          {/* --- User Menu --- */}
+          <div className="relative">
             <button 
-              onClick={() => setIsPremiumModalOpen(true)}
-              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-yellow-600/30 bg-yellow-600/10 text-yellow-300 text-sm hover:bg-yellow-600/20 transition-all font-medium"
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center hover:bg-white/20 transition-all"
             >
-              <ShieldCheck className="w-4 h-4" />
-              <span>{user.tier === 'premium' ? 'Premium Active' : 'Upgrade'}</span>
+              <UserIcon className="w-5 h-5 text-white" />
             </button>
 
-            {/* --- User Menu Dropdown --- */}
-            <div className="relative">
-              <button 
-                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center gap-2 p-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
-              >
-                <div className="w-8 h-8 rounded-full bg-yellow-600/20 flex items-center justify-center border border-yellow-500/40">
-                  <UserIcon className="w-4 h-4 text-yellow-400" />
-                </div>
-                <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-300 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
+            <AnimatePresence>
+              {isUserMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setIsUserMenuOpen(false)} />
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute right-0 mt-4 w-72 bg-[#1a1a2e]/90 backdrop-blur-3xl border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden z-20 p-4"
+                  >
+                    <div className="p-4 mb-2">
+                       <h4 className="text-white font-black italic uppercase tracking-tighter text-xl">{user.username}</h4>
+                       <p className="text-white/40 text-xs font-bold uppercase tracking-widest">{user.tier} member</p>
+                    </div>
 
-              <AnimatePresence>
-                {isUserMenuOpen && (
-                  <>
-                    {/* Backdrop for closing */}
-                    <div 
-                      className="fixed inset-0 z-10" 
-                      onClick={() => setIsUserMenuOpen(false)} 
-                    />
-                    
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className="absolute right-0 mt-3 w-64 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-20 backdrop-blur-xl"
-                    >
-                      <div className="p-4 border-b border-white/5 bg-white/5">
-                        <p className="text-sm font-bold text-white">{user.username}</p>
-                        <p className="text-xs text-zinc-500 truncate">{user.email}</p>
-                      </div>
+                    <div className="space-y-1">
+                      <button onClick={() => openProfile('profile')} className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-sm font-bold text-white/70 hover:bg-white/10 hover:text-white transition-all">
+                        <Settings className="w-4 h-4" /> Profile Settings
+                      </button>
                       
-                      <div className="p-2">
-                        <button 
-                          onClick={() => openProfile('profile')}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
-                        >
-                          <Settings className="w-4 h-4" />
-                          Edit Profile
+                      <button onClick={() => openProfile('subscription')} className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-sm font-bold text-white/70 hover:bg-white/10 hover:text-white transition-all">
+                        <Crown className="w-4 h-4 text-yellow-400" /> Subscription
+                      </button>
+                      
+                      {isAdmin && (
+                        <button onClick={onOpenAdmin} className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-sm font-bold text-yellow-500 hover:bg-yellow-500/10 transition-all">
+                          <LayoutDashboard className="w-4 h-4" /> Admin Controls
                         </button>
-                        
-                        <button 
-                          onClick={() => openProfile('subscription')}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
-                        >
-                          <Crown className="w-4 h-4 text-yellow-500" />
-                          Manage Subscription
-                        </button>
-                        
-                        {isAdmin && (
-                          <button 
-                            onClick={onOpenAdmin}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-yellow-500 hover:bg-yellow-500/5 transition-colors"
-                          >
-                            <LayoutDashboard className="w-4 h-4" />
-                            Admin Dashboard
-                          </button>
-                        )}
-                        
-                        {user.tier !== 'premium' && (
-                          <button 
-                            onClick={() => {
-                              setIsPremiumModalOpen(true);
-                              setIsUserMenuOpen(false);
-                            }}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-yellow-500 hover:bg-yellow-500/5 transition-colors"
-                          >
-                            <ShieldCheck className="w-4 h-4" />
-                            Go Premium
-                          </button>
-                        )}
+                      )}
 
-                        <div className="h-px bg-white/5 my-2" />
-                        
-                        <button 
-                          onClick={logout}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-400/5 transition-colors text-left"
-                        >
-                          <LogOut className="w-4 h-4" />
-                          Logout
-                        </button>
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
+                      <div className="h-px bg-white/5 my-2 mx-4" />
+                      
+                      <button onClick={logout} className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl text-sm font-bold text-red-400 hover:bg-red-400/10 transition-all">
+                        <LogOut className="w-4 h-4" /> Sign Out
+                      </button>
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* --- Left Column: Profile & Stats --- */}
-          <div className="hidden lg:block lg:col-span-1 space-y-6">
-            <div className="p-6 rounded-2xl border border-yellow-600/20 bg-gradient-to-b from-yellow-900/10 to-transparent backdrop-blur-sm">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 rounded-full bg-yellow-600/20 border-2 border-yellow-500/40 flex items-center justify-center overflow-hidden">
-                  <UserIcon className="w-8 h-8 text-yellow-400" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-yellow-100">{user.username}</h2>
-                  <p className="text-yellow-200/50 text-sm">{user.email}</p>
-                </div>
-              </div>
+      <main className="flex-1 max-w-7xl w-full mx-auto px-6 lg:px-12 pt-8 pb-4 sm:pt-4 sm:pb-16 relative z-10 flex flex-col sm:justify-center overflow-y-auto sm:overflow-hidden">
+        <div className="flex flex-col items-center">
+           <motion.div 
+             initial={{ opacity: 0, y: 20 }}
+             animate={{ opacity: 1, y: 0 }}
+             className="text-center mt-4 mb-6 sm:mt-0 sm:mb-16 shrink-0"
+           >
+             <h1 className="text-3xl sm:text-7xl font-black text-white italic uppercase tracking-tighter leading-none mb-1 sm:mb-4">
+               Meet people <span className="text-yellow-400">instantly</span>
+             </h1>
+             <p className="text-white/60 text-xs sm:text-xl font-bold uppercase tracking-widest">
+               Choose your mode and start the party
+             </p>
+           </motion.div>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 rounded-xl bg-white/5">
-                  <div className="flex items-center gap-3">
-                    <Users className="w-4 h-4 text-yellow-400" />
-                    <span className="text-sm text-yellow-100/80">Gender</span>
-                  </div>
-                  <span className="text-sm font-medium text-yellow-300 capitalize">{user.gender || 'Not set'}</span>
-                </div>
-                
-                <div className="flex items-center justify-between p-3 rounded-xl bg-white/5">
-                  <div className="flex items-center gap-3">
-                    <ShieldCheck className="w-4 h-4 text-yellow-400" />
-                    <span className="text-sm text-yellow-100/80">Membership</span>
-                  </div>
-                  <span className={`text-sm font-medium capitalize ${user.tier === 'premium' ? 'text-yellow-300' : 'text-yellow-200/50'}`}>
-                    {user.tier}
-                  </span>
-                </div>
-              </div>
-
-              <Button 
-                variant="outline"
-                onClick={() => openProfile('profile')}
-                className="w-full mt-6 border-yellow-600/20 bg-white/5 text-yellow-200 hover:bg-white/10"
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Edit Profile
-              </Button>
-            </div>
-          </div>
-
-          {/* --- Right Column: Main Action --- */}
-          <div className="lg:col-span-2 space-y-8">
-            <div className="relative p-8 sm:p-12 rounded-3xl border border-yellow-600/30 overflow-hidden group">
-              {/* Background Glow */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-yellow-500/10 blur-[100px] pointer-events-none group-hover:bg-yellow-500/15 transition-all duration-700" />
+           {/* --- Main Action Cards --- */}
+           <div className="grid sm:grid-cols-2 gap-4 sm:gap-8 w-full max-w-5xl shrink-1">
               
-              <div className="relative z-10 flex flex-col items-center text-center">
-                <div className="w-20 h-20 bg-yellow-400 rounded-2xl flex items-center justify-center mb-6 rotate-3 group-hover:rotate-6 transition-transform shadow-2xl shadow-yellow-500/40">
-                  <MessageSquare className="w-10 h-10 text-black" />
-                </div>
+              {/* Video Chat Card */}
+              <motion.button 
+                whileHover={{ scale: 1.02, rotate: -1 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  setChatMode('video');
+                  onStartChat('video');
+                }}
+                className={`relative group h-48 sm:h-[28rem] rounded-3xl sm:rounded-[3.5rem] overflow-hidden border-4 transition-all ${
+                  chatMode === 'video' ? 'border-yellow-400 shadow-2xl shadow-yellow-400/20' : 'border-white/10 hover:border-white/30'
+                }`}
+              >
+                <img 
+                  src="https://images.unsplash.com/photo-1516724562728-afc824a36e84?auto=format&fit=crop&q=80&w=800" 
+                  className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700" 
+                  alt="Video mode"
+                />
+                <div className={`absolute inset-0 bg-gradient-to-t ${chatMode === 'video' ? 'from-[#5B46F2] via-transparent' : 'from-black/80 via-transparent'}`} />
                 
-                <h1 className="text-3xl sm:text-4xl font-black mb-4 bg-gradient-to-r from-white to-yellow-200 bg-clip-text text-transparent italic">
-                  READY TO CONNECT?
-                </h1>
-                
-                <p className="text-yellow-100/60 max-w-md mb-8 text-lg">
-                  Meet interesting people from around the world instantly via random video chat.
-                </p>
-
-                {/* --- Matching Preferences (Dropdown Style) --- */}
-                <div className="w-full max-w-sm mb-8">
-                  <div className="relative">
-                    <button 
-                      onClick={() => setIsGenderMenuOpen(!isGenderMenuOpen)}
-                      className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md hover:bg-white/10 transition-all group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center border border-yellow-500/40">
-                          <Users className="w-4 h-4 text-yellow-500" />
-                        </div>
-                        <div className="text-left">
-                          <p className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest leading-none mb-1">Looking for</p>
-                          <p className="text-sm font-bold text-white leading-none capitalize">
-                            {preferredGender === 'all' ? 'Everyone' : preferredGender}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                         <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-300 ${isGenderMenuOpen ? 'rotate-180' : ''}`} />
-                      </div>
-                    </button>
-
-                    <AnimatePresence>
-                      {isGenderMenuOpen && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setIsGenderMenuOpen(false)} />
-                          <motion.div 
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            className="absolute bottom-full mb-3 w-full bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-20"
-                          >
-                            {(['all', 'male', 'female', 'other'] as const).map((g) => (
-                              <button
-                                key={g}
-                                onClick={() => {
-                                  if (user.tier !== 'premium' && g !== 'all') {
-                                    setIsPremiumModalOpen(true);
-                                    setIsGenderMenuOpen(false);
-                                    return;
-                                  }
-                                  setPreferredGender(g);
-                                  setIsGenderMenuOpen(false);
-                                }}
-                                className={`w-full flex items-center justify-between px-4 py-3 text-sm transition-colors ${
-                                  preferredGender === g ? 'bg-yellow-500 text-black font-bold' : 'text-zinc-300 hover:bg-white/5'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className="capitalize">{g === 'all' ? 'Everyone' : g}</span>
-                                  {user.tier !== 'premium' && g !== 'all' && (
-                                    <ShieldCheck className="w-3 h-3 text-yellow-500/60" />
-                                  )}
-                                </div>
-                                {preferredGender === g && <div className="w-1.5 h-1.5 rounded-full bg-black" />}
-                              </button>
-                            ))}
-                          </motion.div>
-                        </>
-                      )}
-                    </AnimatePresence>
+                <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10 flex flex-col justify-end items-start text-left">
+                  <div className={`w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center mb-2 sm:mb-4 transition-colors ${
+                    chatMode === 'video' ? 'bg-yellow-400 text-black' : 'bg-white/20 text-white'
+                  }`}>
+                    <Video size={20} className="sm:hidden" />
+                    <Video size={28} className="hidden sm:block" />
                   </div>
+                  <h3 className="text-2xl sm:text-4xl font-black italic uppercase tracking-tighter text-white leading-none whitespace-nowrap sm:whitespace-normal">Video <br className="hidden sm:block" /> Chat</h3>
+                  <p className="mt-1 sm:mt-2 text-white/60 font-bold uppercase tracking-widest text-[10px]">Real-time face-to-face</p>
                 </div>
 
-                {/* --- Chat Mode Selection --- */}
-                <div className="flex gap-4 w-full max-w-sm mb-4">
-                  <button 
-                    onClick={() => setChatMode('video')}
-                    className={`flex-1 flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all ${
-                      chatMode === 'video' 
-                        ? 'bg-yellow-500/20 border-yellow-500 text-yellow-500' 
-                        : 'bg-white/5 border-white/10 text-zinc-500 hover:bg-white/10'
-                    }`}
-                  >
-                    <Video size={18} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Video Chat</span>
-                  </button>
-                  <button 
-                    onClick={() => setChatMode('text')}
-                    className={`flex-1 flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all ${
-                      chatMode === 'text' 
-                        ? 'bg-yellow-500/20 border-yellow-500 text-yellow-500' 
-                        : 'bg-white/5 border-white/10 text-zinc-500 hover:bg-white/10'
-                    }`}
-                  >
-                    <MessageSquare size={18} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Text Only</span>
-                  </button>
-                </div>
+                {chatMode === 'video' && (
+                  <div className="absolute top-8 right-8 bg-yellow-400 text-black text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
+                    Selected
+                  </div>
+                )}
+              </motion.button>
 
-                <Button 
-                  onClick={() => onStartChat(chatMode)}
-                  className="px-10 h-14 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-bold text-lg rounded-full shadow-xl shadow-yellow-500/20 hover:scale-105 active:scale-95 transition-all w-full max-w-sm"
-                >
-                  START {chatMode === 'video' ? 'VIDEO' : 'TEXT'} CHAT
-                </Button>
+              {/* Text Chat Card */}
+              <motion.button 
+                whileHover={{ scale: 1.02, rotate: 1 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  setChatMode('text');
+                  onStartChat('text');
+                }}
+                className={`relative group h-48 sm:h-[28rem] rounded-3xl sm:rounded-[3.5rem] overflow-hidden border-4 transition-all ${
+                  chatMode === 'text' ? 'border-yellow-400 shadow-2xl shadow-yellow-400/20' : 'border-white/10 hover:border-white/30'
+                }`}
+              >
+                <img 
+                  src="https://images.unsplash.com/photo-1512486130939-2c4f79935e4f?auto=format&fit=crop&q=80&w=800" 
+                  className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700" 
+                  alt="Text mode"
+                />
+                <div className={`absolute inset-0 bg-gradient-to-t ${chatMode === 'text' ? 'from-[#5B46F2] via-transparent' : 'from-black/80 via-transparent'}`} />
                 
-                <p className="mt-6 text-xs text-yellow-200/40 flex items-center gap-2">
-                  <ShieldCheck className="w-3 h-3 text-yellow-500/50" />
-                  Encrypted & Secure Peer-to-Peer Connection
-                </p>
-              </div>
-            </div>
+                <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10 flex flex-col justify-end items-start text-left">
+                  <div className={`w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center mb-2 sm:mb-4 transition-colors ${
+                    chatMode === 'text' ? 'bg-yellow-400 text-black' : 'bg-white/20 text-white'
+                  }`}>
+                    <MessageSquare size={20} className="sm:hidden" />
+                    <MessageSquare size={28} className="hidden sm:block" />
+                  </div>
+                  <h3 className="text-2xl sm:text-4xl font-black italic uppercase tracking-tighter text-white leading-none whitespace-nowrap sm:whitespace-normal">Text <br className="hidden sm:block" /> Only</h3>
+                  <p className="mt-1 sm:mt-2 text-white/60 font-bold uppercase tracking-widest text-[10px]">Secure chat connection</p>
+                </div>
 
-            {/* Quick Tips/Features */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-yellow-500/30 transition-colors">
-                <h3 className="font-bold text-yellow-100 mb-1">Global Community</h3>
-                <p className="text-sm text-yellow-100/50">Connect with millions of active users worldwide.</p>
+                {chatMode === 'text' && (
+                  <div className="absolute top-6 right-6 sm:top-8 sm:right-8 bg-yellow-400 text-black text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-3 py-1 rounded-full">
+                    Selected
+                  </div>
+                )}
+              </motion.button>
+
+           </div>
+
+           {/* --- Filters & Start Button --- */}
+           <div className="mt-6 sm:mt-12 w-full max-w-sm flex flex-col gap-4 sm:gap-6 shrink-0">
+              
+              <div className="bg-white/10 backdrop-blur-3xl border border-white/20 rounded-2xl sm:rounded-[2rem] p-3 sm:p-4 flex items-center justify-between">
+                 <div className="flex items-center gap-3 sm:gap-4 pl-1 sm:pl-2">
+                    <div className="p-1.5 sm:p-2 bg-yellow-400 rounded-lg sm:rounded-xl">
+                       <Users className="w-4 h-4 sm:w-5 sm:h-5 text-black" />
+                    </div>
+                    <div className="text-left">
+                       <p className="text-[9px] sm:text-[10px] font-black text-white/40 uppercase tracking-widest leading-none mb-1">Looking for</p>
+                       <p className="text-xs sm:text-sm font-black text-white uppercase italic tracking-tighter">
+                          {preferredGender === 'all' ? 'Everyone' : preferredGender}
+                       </p>
+                    </div>
+                 </div>
+
+                 <div className="flex gap-1 pr-1">
+                    {(['all', 'male', 'female'] as const).map((g) => (
+                       <button
+                         key={g}
+                         onClick={() => {
+                            if (user.tier !== 'premium' && g !== 'all') {
+                               setIsPremiumModalOpen(true);
+                               return;
+                            }
+                            setPreferredGender(g);
+                         }}
+                         className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center text-xs sm:text-sm font-black transition-all ${
+                            preferredGender === g ? 'bg-yellow-400 text-black' : 'text-white/40 hover:text-white hover:bg-white/10'
+                         }`}
+                       >
+                          {g === 'all' ? <Zap size={14} /> : g.charAt(0).toUpperCase()}
+                       </button>
+                    ))}
+                 </div>
               </div>
-              <div className="p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-yellow-500/30 transition-colors">
-                <h3 className="font-bold text-yellow-100 mb-1">Instant Matches</h3>
-                <p className="text-sm text-yellow-100/50">Zero wait time with our high-speed matching algorithm.</p>
+
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => onStartChat(chatMode)}
+                className="w-full h-16 sm:h-20 bg-white text-[#5B46F2] rounded-2xl sm:rounded-[2rem] flex items-center justify-center gap-3 sm:gap-4 shadow-2xl shadow-black/20 group"
+              >
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#5B46F2] rounded-lg sm:rounded-xl flex items-center justify-center text-white group-hover:rotate-12 transition-transform">
+                   <Play size={16} className="fill-current sm:hidden" />
+                   <Play size={20} className="fill-current hidden sm:block" />
+                </div>
+                <span className="text-xl sm:text-2xl font-black italic uppercase tracking-tighter">Enter {chatMode}</span>
+              </motion.button>
+
+              <div className="flex items-center justify-center gap-2 opacity-50 mb-4 sm:mb-0">
+                 <ShieldCheck className="w-3 h-3 text-white" />
+                 <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest">Safe & Anonymous connection</span>
               </div>
-            </div>
-          </div>
+           </div>
         </div>
       </main>
 

@@ -13,7 +13,8 @@ import {
   Maximize2,
   Users,
   ChevronRight,
-  MessageSquare
+  MessageSquare,
+  Video
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -272,49 +273,64 @@ export function ChatInterface({ socket, onExit, preferredGender, chatMode }: Cha
           🔍 Searching Overlay
       =============================== */}
       {isSearching && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black z-50 text-white text-xl flex-col gap-4">
-          <div className="flex flex-col items-center gap-2">
-            <div className="animate-pulse">
-              {partnerId ? "Connecting to partner..." : `Searching for ${
-                preferredGender === 'all' ? 'Anyone' : 
-                preferredGender === 'female' ? 'Girls Only' : 
-                preferredGender === 'male' ? 'Boys Only' : 
-                preferredGender + 's'
-              }...`}
+        <div className="absolute inset-0 bg-[#5B46F2] bg-gradient-to-br from-[#5B46F2] via-[#4F39CC] to-[#3924A8] z-50 flex flex-col items-center justify-center p-6 text-center">
+          {/* Background Patterns */}
+          <div className="absolute inset-0 opacity-10 pointer-events-none select-none overflow-hidden">
+            <div className="grid grid-cols-12 gap-8 w-full h-full p-20 rotate-12 scale-150">
+              {Array.from({ length: 48 }).map((_, i) => (
+                <div key={i} className="text-white text-[10px] font-black opacity-20 uppercase tracking-widest italic select-none">
+                  Searching
+                </div>
+              ))}
             </div>
+          </div>
+
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="relative z-10 flex flex-col items-center gap-8"
+          >
+            <div className="relative">
+               <div className="w-24 h-24 bg-yellow-400 rounded-[2rem] flex items-center justify-center shadow-2xl animate-bounce">
+                  <Video className="text-black w-10 h-10" />
+               </div>
+               <div className="absolute -inset-4 bg-yellow-400/20 rounded-full blur-2xl animate-pulse" />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-4xl sm:text-5xl font-black text-white italic uppercase tracking-tighter leading-none">
+                {partnerId ? "Connecting..." : "Finding Match"}
+              </h2>
+              <p className="text-white/60 font-bold uppercase tracking-widest text-xs">
+                {preferredGender === 'all' ? 'Everyone' : preferredGender === 'female' ? 'Girls Only' : 'Boys Only'} Mode
+              </p>
+            </div>
+
             {isFallbackActive && (
               <motion.div 
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-xs text-yellow-500/80 bg-yellow-500/10 px-3 py-1 rounded-full border border-yellow-500/20"
+                className="px-6 py-2 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 text-white text-xs font-bold uppercase tracking-widest"
               >
-                Connecting to anyone available...
+                Expanding search to everyone...
               </motion.div>
             )}
-          </div>
-          {partnerId ? (
+
             <div className="flex gap-4">
               <button 
                 onClick={handleSkip}
-                className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-sm rounded-full transition-colors border border-white/10"
+                className="px-8 py-3 bg-white/5 hover:bg-white/10 text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all border border-white/10 backdrop-blur-sm"
               >
-                Take too long? Skip
+                {partnerId ? "Skip wait" : "Skip"}
               </button>
               <button 
                 onClick={handleExit}
-                className="px-6 py-2 bg-red-500/20 hover:bg-red-500/40 text-red-500 text-sm rounded-full transition-colors border border-red-500/30"
+                className="px-8 py-3 bg-red-500 hover:bg-red-600 text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-red-500/20"
               >
-                Cancel Search
+                Exit
               </button>
             </div>
-          ) : (
-            <button 
-              onClick={handleExit}
-              className="mt-4 px-8 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-full transition-all border border-white/10 backdrop-blur-md"
-            >
-              Cancel & Exit
-            </button>
-          )}
+          </motion.div>
         </div>
       )}
 
@@ -352,9 +368,9 @@ export function ChatInterface({ socket, onExit, preferredGender, chatMode }: Cha
           </>
         ) : (
           /* Text Mode Background */
-          <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-black to-zinc-900 flex items-center justify-center">
+          <div className="absolute inset-0 bg-[#5B46F2] bg-gradient-to-br from-[#5B46F2] via-[#4F39CC] to-[#3924A8] flex items-center justify-center">
             {!isSearching && (
-              <div className="text-zinc-800 text-9xl font-black italic select-none opacity-20 transform -rotate-12">
+              <div className="text-white text-9xl font-black italic select-none opacity-10 transform -rotate-12 uppercase tracking-tighter">
                 CHATMYTE
               </div>
             )}
@@ -366,21 +382,21 @@ export function ChatInterface({ socket, onExit, preferredGender, chatMode }: Cha
           🏷️ Partner Info Overlay
       =============================== */}
       {!isSearching && partnerInfo && (
-        <div className="absolute top-6 left-6 z-40 flex flex-col gap-2">
-          <div className="flex items-center gap-2 px-4 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-full shadow-2xl">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-white font-medium text-sm sm:text-base">
+        <div className="absolute top-8 left-8 z-40 flex flex-col gap-3">
+          <motion.div 
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            className="flex items-center gap-3 px-5 py-3 bg-black/40 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl"
+          >
+            <div className="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)] animate-pulse" />
+            <span className="text-white text-xl font-black italic uppercase tracking-tighter">
               {partnerInfo.name}, {partnerInfo.age}
             </span>
-          </div>
-          <div className="px-3 py-1 bg-yellow-500/10 backdrop-blur-md border border-yellow-500/20 rounded-full inline-flex self-start">
-             <span className="text-yellow-500/80 text-[10px] uppercase font-bold tracking-widest leading-none">
-               Connected to {
-                 preferredGender === 'all' ? 'Everyone' : 
-                 preferredGender === 'female' ? 'Girls Only' : 
-                 preferredGender === 'male' ? 'Boys Only' : 
-                 preferredGender
-               }
+          </motion.div>
+          
+          <div className="px-4 py-1.5 bg-yellow-400 rounded-2xl self-start shadow-xl shadow-yellow-400/20">
+             <span className="text-black text-[10px] uppercase font-black tracking-widest leading-none">
+               {currentSearchGender === 'all' ? 'Everyone Mode' : currentSearchGender === 'female' ? 'Girls Only' : 'Boys Only'}
              </span>
           </div>
         </div>
