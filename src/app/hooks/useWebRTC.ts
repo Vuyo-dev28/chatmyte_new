@@ -13,7 +13,9 @@ interface UseWebRTCProps {
 const iceServers = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
-
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun.cloudflare.com:3478" },
     {
       urls: [
         "turn:openrelay.metered.ca:80?transport=udp",
@@ -23,7 +25,8 @@ const iceServers = {
       username: "openrelayproject",
       credential: "openrelayproject"
     }
-  ]
+  ],
+  iceCandidatePoolSize: 10
 };
 
 export const useWebRTC = ({
@@ -96,11 +99,16 @@ export const useWebRTC = ({
 
     // ICE
     pc.onicecandidate = (event) => {
-      if (event.candidate && partnerIdRef.current) {
-        socket.emit("ice-candidate", {
-          candidate: event.candidate,
-          targetId: partnerIdRef.current
-        });
+      if (event.candidate) {
+        console.log(`📡 [WebRTC] Generated ICE candidate: ${event.candidate.candidate.substring(0, 40)}...`);
+        if (partnerIdRef.current) {
+          socket.emit("ice-candidate", {
+            candidate: event.candidate,
+            targetId: partnerIdRef.current
+          });
+        }
+      } else {
+        console.log("📡 [WebRTC] ICE candidate gathering complete");
       }
     };
 
@@ -224,16 +232,25 @@ export const useWebRTC = ({
       partnerIdRef.current = from; // Atomic update
       const pc = await initializePeerConnection();
       console.log(`📥 [Signaling] Handling offer from ${from}. State: ${pc.signalingState}`);
-
+      
       const offerCollision =
         makingOfferRef.current || pc.signalingState !== "stable";
 
+      // Perfect Negotiation: One is polite, one is impolite
+      // socket.id is consistent between peers, so one will always be greater than the other
       const isPolite = !socket.id || (socket.id > from);
-      ignoreOfferRef.current = isPolite && offerCollision;
+      
+      // The IMpolite peer ignores offers when there's a collision
+      ignoreOfferRef.current = !isPolite && offerCollision;
 
       if (ignoreOfferRef.current) {
-        console.warn("⚠️ [Signaling] Ignoring offer due to collision (polite peer logic)");
+        console.warn("⚠️ [Signaling] I am IMpolite. Ignoring offer due to collision.");
         return;
+      }
+
+      if (offerCollision) {
+         console.log("🔄 [Signaling] I am polite. Rolling back local offer to handle incoming offer.");
+         await pc.setLocalDescription({ type: "rollback" });
       }
 
       if (pc.signalingState === "closed") return;
