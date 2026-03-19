@@ -400,22 +400,13 @@ io.on('connection', async (socket) => {
         return;
       }
       
-      const matchId = `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
       user.partnerId = match.socketId;
       matchUser.partnerId = socket.id;
-      user.matchId = matchId;
-      matchUser.matchId = matchId;
-      user.role = 'caller';
-      matchUser.role = 'callee';
-      
       activeConnections.set(socket.id, user);
       activeConnections.set(match.socketId, matchUser);
       
       socket.emit('matched', {
         partnerId: match.socketId,
-        matchId: matchId,
-        role: 'caller',
         partnerInfo: {
           name: match.username,
           gender: match.gender,
@@ -426,8 +417,6 @@ io.on('connection', async (socket) => {
       
       io.to(match.socketId).emit('matched', {
         partnerId: socket.id,
-        matchId: matchId,
-        role: 'callee',
         partnerInfo: {
           name: user.username,
           gender: user.gender,
@@ -455,43 +444,46 @@ io.on('connection', async (socket) => {
 
   // WebRTC signaling
   socket.on('offer', (data) => {
-    const { offer, to, matchId } = data;
+    const { offer, to } = data;
     const user = activeConnections.get(socket.id);
+    
+    // Support both 'to' and 'targetId' for backward compatibility
     const targetId = to || data.targetId;
     
-    if (user && user.partnerId === targetId && user.matchId === matchId) {
+    if (user && user.partnerId === targetId) {
       io.to(targetId).emit('offer', {
         offer,
-        fromId: socket.id,
-        matchId: matchId
+        fromId: socket.id
       });
     }
   });
 
   socket.on('answer', (data) => {
-    const { answer, to, matchId } = data;
+    const { answer, to } = data;
     const user = activeConnections.get(socket.id);
+    
+    // Support both 'to' and 'targetId' for backward compatibility
     const targetId = to || data.targetId;
     
-    if (user && user.partnerId === targetId && user.matchId === matchId) {
+    if (user && user.partnerId === targetId) {
       io.to(targetId).emit('answer', {
         answer,
-        fromId: socket.id,
-        matchId: matchId
+        fromId: socket.id
       });
     }
   });
 
   socket.on('ice-candidate', (data) => {
-    const { candidate, to, matchId } = data;
+    const { candidate, to } = data;
     const user = activeConnections.get(socket.id);
+    
+    // Support both 'to' and 'targetId' for backward compatibility
     const targetId = to || data.targetId;
     
-    if (user && user.partnerId === targetId && user.matchId === matchId) {
+    if (user && user.partnerId === targetId) {
       io.to(targetId).emit('ice-candidate', {
         candidate,
-        fromId: socket.id,
-        matchId: matchId
+        fromId: socket.id
       });
     }
   });

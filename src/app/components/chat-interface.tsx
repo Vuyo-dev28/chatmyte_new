@@ -34,8 +34,6 @@ export function ChatInterface({ socket, onExit, preferredGender, chatMode }: Cha
   const [isUserViewMain, setIsUserViewMain] = useState(false);
   const [remoteAspectRatio, setRemoteAspectRatio] = useState<'landscape' | 'portrait'>('landscape');
   const [partnerInfo, setPartnerInfo] = useState<{ name: string; age: number } | null>(null);
-  const [matchId, setMatchId] = useState<string | null>(null);
-  const [role, setRole] = useState<'caller' | 'callee' | null>(null);
   const [currentSearchGender, setCurrentSearchGender] = useState(preferredGender);
   const [isFallbackActive, setIsFallbackActive] = useState(false);
   const [messages, setMessages] = useState<{ sender: 'me' | 'partner'; text: string; time: number }[]>([]);
@@ -60,9 +58,7 @@ export function ChatInterface({ socket, onExit, preferredGender, chatMode }: Cha
     remoteVideoRef,
     isVideoEnabled,
     isAudioEnabled,
-    partnerId: chatMode === 'video' ? partnerId : null,
-    matchId: chatMode === 'video' ? matchId : null,
-    role: chatMode === 'video' ? role : null
+    partnerId: chatMode === 'video' ? partnerId : null // Only init WebRTC in video mode
   });
 
   // ===============================
@@ -92,8 +88,6 @@ export function ChatInterface({ socket, onExit, preferredGender, chatMode }: Cha
     closePeerConnection(); // Keep media, only close peer connection
     setPartnerId(null);
     setPartnerInfo(null);
-    setMatchId(null);
-    setRole(null);
     setMessages([]); // Clear chat history
     setRemoteAspectRatio('landscape'); // Reset UI state
     setIsSearching(true);
@@ -131,46 +125,38 @@ export function ChatInterface({ socket, onExit, preferredGender, chatMode }: Cha
     if (!socket || !user) return;
     
     // Server emits "matched" when a match is found
-    socket.on("matched", async (data: { 
-      partnerId: string; 
-      matchId: string; 
-      role: 'caller' | 'callee';
-      partnerInfo: { name: string; age: number } 
-    }) => {
-      console.log(`🎯 [Signaling] Match found: ${data.partnerId} | ID: ${data.matchId} | Role: ${data.role}`);
+    socket.on("matched", async (data: { partnerId: string; partnerInfo: { name: string; age: number } }) => {
+      console.log(`🎯 [Signaling] Match found: ${data.partnerId}`, data.partnerInfo);
       
       // Safety delay to ensure previous connection teardown is complete
       await new Promise(resolve => setTimeout(resolve, 100));
 
       setPartnerId(data.partnerId);
-      setMatchId(data.matchId);
-      setRole(data.role);
-      
       setPartnerInfo({
         name: data.partnerInfo.name || "User",
         age: data.partnerInfo.age || 18
       });
       setIsSearching(false);
 
-      // Caller initiates the offer
-      if (data.role === 'caller') {
-        console.log(`📤 [Signaling] I am the caller. Initiating offer...`);
-        await createOffer(data.partnerId, data.matchId);
+      // deterministic offer creator (lexicographical order)
+      if (socket.id && socket.id < data.partnerId) {
+        console.log(`📤 [Signaling] I am the offerer (< ${data.partnerId})`);
+        await createOffer(data.partnerId);
       } else {
-        console.log(`📥 [Signaling] I am the callee. Waiting for offer...`);
+        console.log(`📥 [Signaling] I am the answerer (>= ${data.partnerId})`);
       }
     });
 
-    socket.on("offer", async ({ offer, fromId, matchId: incomingMatchId }) => {
-      await handleOffer(offer, fromId, incomingMatchId);
+    socket.on("offer", async ({ offer, fromId }) => {
+      await handleOffer(offer, fromId);
     });
 
-    socket.on("answer", async ({ answer, fromId, matchId: incomingMatchId }) => {
-      await handleAnswer(answer, fromId, incomingMatchId);
+    socket.on("answer", async ({ answer, fromId }) => {
+      await handleAnswer(answer, fromId);
     });
 
-    socket.on("ice-candidate", async ({ candidate, fromId, matchId: incomingMatchId }) => {
-      await handleIceCandidate(candidate, fromId, incomingMatchId);
+    socket.on("ice-candidate", async ({ candidate, fromId }) => {
+      await handleIceCandidate(candidate, fromId);
     });
 
     socket.on("partner-disconnected", () => {
