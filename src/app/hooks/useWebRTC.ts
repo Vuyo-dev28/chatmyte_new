@@ -8,6 +8,8 @@ interface UseWebRTCProps {
   isVideoEnabled: boolean;
   isAudioEnabled: boolean;
   partnerId: string | null;
+  matchId: string | null;
+  role: 'caller' | 'callee' | null;
 }
 
 const iceServers = {
@@ -35,20 +37,26 @@ export const useWebRTC = ({
   remoteVideoRef,
   isVideoEnabled,
   isAudioEnabled,
-  partnerId
+  partnerId,
+  matchId,
+  role
 }: UseWebRTCProps) => {
 
   const partnerIdRef = useRef<string | null>(partnerId);
+  const matchIdRef = useRef<string | null>(matchId);
+  const roleRef = useRef<'caller' | 'callee' | null>(role);
 
   useEffect(() => {
     partnerIdRef.current = partnerId;
-  }, [partnerId]);
+    matchIdRef.current = matchId;
+    roleRef.current = role;
+  }, [partnerId, matchId, role]);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
   const makingOfferRef = useRef(false);
-  const ignoreOfferRef = useRef(false);
+  const ignoreOfferRef = useRef(false); // This will be removed or made redundant
 
   // ===============================
   // 1️⃣ Initialize Media (ONLY ONCE)
@@ -101,10 +109,11 @@ export const useWebRTC = ({
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         console.log(`📡 [WebRTC] Generated ICE candidate: ${event.candidate.candidate.substring(0, 40)}...`);
-        if (partnerIdRef.current) {
+        if (partnerIdRef.current && matchIdRef.current) {
           socket.emit("ice-candidate", {
             candidate: event.candidate,
-            targetId: partnerIdRef.current
+            targetId: partnerIdRef.current,
+            matchId: matchIdRef.current
           });
         }
       } else {
@@ -113,14 +122,14 @@ export const useWebRTC = ({
     };
 
     pc.oniceconnectionstatechange = () => {
-      console.log("[WebRTC] ICE state:", pc.iceConnectionState);
+      console.log(`[WebRTC] ICE state (${matchIdRef.current}):`, pc.iceConnectionState);
       if (pc.iceConnectionState === "failed") {
-        console.warn("[WebRTC] ICE connection failed, consider restarting or skipping");
+        console.warn("[WebRTC] ICE connection failed for match:", matchIdRef.current);
       }
     };
 
     pc.onconnectionstatechange = () => {
-      console.log("[WebRTC] Connection state:", pc.connectionState);
+      console.log(`[WebRTC] Connection state (${matchIdRef.current}):`, pc.connectionState);
     };
 
     // Remote Track
@@ -182,15 +191,23 @@ export const useWebRTC = ({
 
     return pc;
 
-  }, [initializeMedia, socket, remoteVideoRef]);
+  }, [initializeMedia, socket, remoteVideoRef, matchIdRef]);
 
   // No manual SDP patching needed; using sender parameters for bitrate
 
   // ===============================
   // 3️⃣ Create Offer
   // ===============================
-  const createOffer = useCallback(async (targetId: string) => {
-    partnerIdRef.current = targetId; // Atomic update
+  const createOffer = useCallback(async (targetId: string, currentMatchId: string) => {
+    if (roleRef.current !== 'caller') {
+      console.warn("⚠️ [WebRTC] Not the caller. Skipping offer creation.");
+      return;
+    }
+
+    console.log(`📤 [WebRTC] Creating offer for match: ${currentMatchId}`);
+    partnerIdRef.current = targetId;
+    matchIdRef.current = currentMatchId;
+    
     const pc = await initializePeerConnection();
 
     try {
@@ -208,7 +225,8 @@ export const useWebRTC = ({
 
       socket.emit("offer", {
         offer,
-        targetId: targetId
+        targetId: targetId,
+        matchId: currentMatchId
       });
     } catch (err) {
       console.error("❌ Offer creation error:", err);
@@ -216,12 +234,18 @@ export const useWebRTC = ({
       makingOfferRef.current = false;
     }
 
-  }, [initializePeerConnection, socket]);
+  }, [initializePeerConnection, socket, roleRef]);
 
   // ===============================
   // 4️⃣ Handle Offer
   // ===============================
-  const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, from: string) => {
+  const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, from: string, incomingMatchId: string) => {
+    // 🛡️ Strict Session Validation
+    if (matchIdRef.current && matchIdRef.current !== incomingMatchId) {
+      console.warn(`⚠️ [Signaling] Ignoring offer from stale match ${incomingMatchId} (Active: ${matchIdRef.current})`);
+      return;
+    }
+
     // 🛡️ Strict Omegle Logic: Ignore offers from anyone except current partner
     if (partnerIdRef.current && partnerIdRef.current !== from) {
       console.warn("⚠️ [Signaling] Ignoring offer from old partner:", from);
@@ -230,29 +254,12 @@ export const useWebRTC = ({
 
     try {
       partnerIdRef.current = from; // Atomic update
+      matchIdRef.current = incomingMatchId; // Atomic update
       const pc = await initializePeerConnection();
-      console.log(`📥 [Signaling] Handling offer from ${from}. State: ${pc.signalingState}`);
+      console.log(`📥 [Signaling] Handling offer from ${from} for match ${incomingMatchId}. State: ${pc.signalingState}`);
       
-      const offerCollision =
-        makingOfferRef.current || pc.signalingState !== "stable";
-
-      // Perfect Negotiation: One is polite, one is impolite
-      // socket.id is consistent between peers, so one will always be greater than the other
-      const isPolite = !socket.id || (socket.id > from);
-      
-      // The IMpolite peer ignores offers when there's a collision
-      ignoreOfferRef.current = !isPolite && offerCollision;
-
-      if (ignoreOfferRef.current) {
-        console.warn("⚠️ [Signaling] I am IMpolite. Ignoring offer due to collision.");
-        return;
-      }
-
-      if (offerCollision) {
-         console.log("🔄 [Signaling] I am polite. Rolling back local offer to handle incoming offer.");
-         await pc.setLocalDescription({ type: "rollback" });
-      }
-
+      // With server-assigned roles, we don't need polite/impolite logic for collision.
+      // The callee simply accepts the offer.
       if (pc.signalingState === "closed") return;
 
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
@@ -274,7 +281,8 @@ export const useWebRTC = ({
 
       socket.emit("answer", {
         answer,
-        targetId: from
+        targetId: from,
+        matchId: incomingMatchId
       });
     } catch (err) {
       console.error("❌ Offer handling error:", err);
@@ -285,7 +293,13 @@ export const useWebRTC = ({
   // ===============================
   // 5️⃣ Handle Answer
   // ===============================
-  const handleAnswer = useCallback(async (answer: RTCSessionDescriptionInit, from?: string) => {
+  const handleAnswer = useCallback(async (answer: RTCSessionDescriptionInit, from: string, incomingMatchId: string) => {
+    // 🛡️ Strict Session Validation
+    if (matchIdRef.current && matchIdRef.current !== incomingMatchId) {
+      console.warn(`⚠️ [Signaling] Ignoring answer from stale match ${incomingMatchId} (Active: ${matchIdRef.current})`);
+      return;
+    }
+
     // 🛡️ Strict Omegle Logic: Ignore answers from unknown partners
     if (from && partnerIdRef.current && partnerIdRef.current !== from) {
       console.warn("⚠️ [Signaling] Ignoring answer from old partner:", from);
@@ -296,7 +310,7 @@ export const useWebRTC = ({
       const pc = peerConnectionRef.current;
       if (!pc) return;
 
-      console.log("📥 Handling answer...");
+      console.log(`📥 Handling answer for match: ${incomingMatchId}`);
 
       if (pc.signalingState === "closed") return;
 
@@ -320,7 +334,13 @@ export const useWebRTC = ({
   // ===============================
   // 6️⃣ Handle ICE Candidate
   // ===============================
-  const handleIceCandidate = useCallback(async (candidate: RTCIceCandidateInit, from?: string) => {
+  const handleIceCandidate = useCallback(async (candidate: RTCIceCandidateInit, from: string, incomingMatchId: string) => {
+    // 🛡️ Strict Session Validation
+    if (matchIdRef.current && matchIdRef.current !== incomingMatchId) {
+      console.warn(`⚠️ [Signaling] Ignoring ICE candidate from stale match ${incomingMatchId} (Active: ${matchIdRef.current})`);
+      return;
+    }
+
     // 🛡️ Strict Omegle Logic: Ignore ICE from unknown partners
     if (from && partnerIdRef.current && partnerIdRef.current !== from) {
       console.warn("⚠️ [Signaling] Ignoring ICE candidate from old partner:", from);
@@ -334,7 +354,7 @@ export const useWebRTC = ({
       if (pc.remoteDescription && pc.remoteDescription.type) {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
       } else {
-        console.log("⏳ Queueing ICE candidate (remote description not set or incomplete)");
+        console.log("⏳ Queueing ICE candidate (remote description not set)");
         iceCandidateQueueRef.current.push(candidate);
       }
     } catch (error) {
